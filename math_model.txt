@@ -1,0 +1,34 @@
+Problem:
+optymalizajca rozkładu n routerów na pietrze (2D) pewnego budynku
+
+Dane wejsciowe:
+Mi,j - bit mapa (np. macierz) - określająca, gdzie są ściany, i jakie są wspólczynniki kary (określające gdzie chcemy mieć zasięg), powiedzmy o rozmiarze NxM
+
+Szukane rozw:
+Xk,l - wektor rozwiązań zawierający współrzędne umieszczonych n routerów (właśćiwie to jest macierz rozmiaru nx2)  (k- nr routera, l to współrzędna i lub j)
+
+W każdym punkcie Mi,j można obliczyć zasięg, który jest funkcją typu:
+
+bez ścian liczymy zasięg od routera k funkcją typu:
+ZM(i, j, k) = a/||r(i, j, k)||, 
+
+gdzie r(i, j, k) to odległość w euklidesowej metryce punktu (i, j) od k-tego router liczymy z r = sqrt((x1- x2)^ + (y1 -y2 )^2) 
+a - stała fizyczna
+
+gdy po drodze łączącej występuje ściana to uwzględniamy jej tłumienie w następujący sposób:
+
+b - stała tłumienia, d - grubość ścianki
+
+liczymy potem zasięg ze wzoru z(i, j, k) z a'
+
+funkcę obliczającą zasięg uwzględniającą ściany nazwijmy ZP(i, j, Xk,l) 
+
+W każdym punkcie (i, j) bit mapy możemy znaleźć największy zasieg:
+
+Z(i, j, Xk,l) = max_k(ZP(i, j, k)), k = 1, 2,... n (k -> nr routera)
+
+następnie uwzględniając bit mapę M(i, j), która ma w sobie współczynniki kary i nagrody (tam gdzie chemy mieć zasięg, a gdzie nie) definiujemy funkcję celu:
+
+f(Xk,l) = sum(i, j)(Z(i, j, Xk,l)*M(i, j)) 
+
+maksymalizujemy wartośc f(Xk,l) szukając Xk,l dla naszych warunków

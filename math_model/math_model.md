@@ -119,10 +119,3 @@ Ze względu na nieliniowość i potencjalne niegładkości (max, dyskretne przes
 	- spełnienie ograniczeń (brak umieszczenia routera w niedozwolonym miejscu).
 
 ---
-
-Jeżeli chcesz, mogę:
-- zapisać powyższy Markdown do pliku `math_model.md` w katalogu projektu (zrobione),
-- dopisać prosty skrypt (np. w Pythonie) liczący `f(X)` dla dyskretnego `X` i prostych modeli tłumienia,
-- zaproponować szczegółową reprezentację mapy `M` (format pliku/JSON) i sposób reprezentowania ścian.
-
-Zadanie: zapisano opis w `math_model.md`.

@@ -1,0 +1,32 @@
+ustalona liczba routerów
+
+poczatkowe rozwiazanie opcje:
+- po routerze na pietra od dołu
+- losowo
+-...
+
+do rozw. konstrukcyjnego (funkcja wyciągająca z minimum lokalnego)
+- liczyć "użyteczność" routera -> czy gdzieś jego zasięg jest istotny
+- dawać nieprzydatny router tam gdzie nie ma zasięgu 
+
+jak wyznaczac nieprzydatny router:
+- mamy wyróżnione punkty np. biurka 
+- zliczamy np. ile dany router obsługuje tych punktów wyróżnionych 
+- albo jakaś średnia -> aktualizowana na bieżąco przy wyznaczaniu rozwiązania
+
+
+algorytm poprawy (zmiany losowe w otoczeniu aktualnego rozwiązania):
+- zamiana miejsca ruotera -> transpozycja ciągu
+- po drodze funckja aspiracji jest sprawdzana
+    - przy sprawdzaniu sąsiadów sprawdzasz kryterium aspiracji -> jeśli sąsiad jest zakazany ALE rozwiązanie z nim jest najlepsze jakie do tej pory widziałem to go wybieram mimo ze jest zakazany
+
+- przestajemy gdy: 
+    - mała poprawa funkcji celu (i tak to będziemy zbierać)
+    - ciagle odwiedza te same punkty
+- wypychamy rozwiązaniem konstrukcyjnym 
+
+
+
+pomsył z potraktowaniem routerów i punktów gdzie chcemy mieć zasięg jako ładunki elektryczne i liczyć relaksacje układu -> zmierza do minimum energetycznego -> routery tylko przy ścianach
+
+

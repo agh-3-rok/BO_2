@@ -30,3 +30,18 @@ algorytm poprawy (zmiany losowe w otoczeniu aktualnego rozwiązania):
 pomsył z potraktowaniem routerów i punktów gdzie chcemy mieć zasięg jako ładunki elektryczne i liczyć relaksacje układu -> zmierza do minimum energetycznego -> routery tylko przy ścianach
 
 
+
+OD PK:
+
+można uwzglednic różne rodzaje routerów
+
+trzeba dać THRESHOLD NA ZASIEG LICZONY W PUNKCIE
+
+
+mozna uwzgledniac obciazenie routerów
+
+mozna sie bawic przy ruchach w sasiedztwie
+    - wykorzystywnaie jakichś funkcji celu przy obliczaniu ruchuchów w s 
+    - heurystyczne liczenie funkcji celu do określania zasięgu przy danej zmianie (liczysz tylko blisko...)
+    
+można zrobić tablice pamietajacą ile dany ruch jest zabiony przy transpozycjach

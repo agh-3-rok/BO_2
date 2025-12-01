@@ -45,3 +45,12 @@ mozna sie bawic przy ruchach w sasiedztwie
     - heurystyczne liczenie funkcji celu do określania zasięgu przy danej zmianie (liczysz tylko blisko...)
     
 można zrobić tablice pamietajacą ile dany ruch jest zabiony przy transpozycjach
+
+
+cela na dzisiaj
+- napisać stryktury danych -> praktycznie zrobionie
+- dopisac funkcje 
+
+- dane inicjalizacyjne -> rozpisać jakieś macierze chatem ;pp
+
+

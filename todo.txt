@@ -1,0 +1,11 @@
+- napisać stryktury danych 
+- liczenie tłumienia
+
+- dopisac funkcje celu:
+- punkt 
+- caly budynek 2 wersje
+
+
+- dane inicjalizacyjne -> rozpisać jakieś macierze chatem ;pp
+
+- jak sie komuś chce to testy...

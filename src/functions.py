@@ -31,8 +31,43 @@ def agregation_func(building: dm.Building, local_ranges: List[Tuple[np.ndarray, 
     Returns:
         ranges (np.ndarray): siatka zasięgów
     """
-    raise NotImplementedError
+    
+    # NARAZIE POMIJAM ILOSC PIĘTER WYSTACZY DODAC FOR PO PIĘTRACH POTEM
+    pietro =  building.Floor_list[0]
+    H, W = pietro.wall.shape
+    
+    global_map = np.zeros((H, W), dtype=float)
+    
+    for local_grid, (start_row, start_col) in local_ranges:
+        # Wymiary małego wycinka
+        h_local, w_local = local_grid.shape
 
+        # Sprawdzamy, gdzie wycinek realnie zaczyna się i kończy na mapie globalnej
+        global_r_start = max(0, start_row)
+        global_r_end = min(H, start_row + h_local)
+        global_c_start = max(0, start_col)
+        global_c_end = min(W, start_col + w_local)
+
+        # Sprawdzamy, które fragmenty wycinka lokalnego odpowiadają tym zakresom
+        # (Jeśli start_row < 0, musimy uciąć początek wycinka lokalnego)
+        local_r_start = global_r_start - start_row
+        local_r_end = local_r_start + (global_r_end - global_r_start)
+        local_c_start = global_c_start - start_col
+        local_c_end = local_c_start + (global_c_end - global_c_start)
+    
+        # Jeśli wycinek jest całkowicie poza mapą, pomijamy
+        if global_r_start >= global_r_end or global_c_start >= global_c_end:
+            continue
+
+        # --- Agregacja (MAX) ---
+        # Bierzemy max z tego co już jest na mapie vs nowy wycinek
+        current_slice = global_map[global_r_start:global_r_end, global_c_start:global_c_end]
+        new_slice = local_grid[local_r_start:local_r_end, local_c_start:local_c_end]
+        
+        global_map[global_r_start:global_r_end, global_c_start:global_c_end] = np.maximum(current_slice, new_slice)
+
+    return global_map
+    
 
 def goal_function(building: dm.Building, ranges_matrix: np.ndarray) -> float:
     """
@@ -45,7 +80,8 @@ def goal_function(building: dm.Building, ranges_matrix: np.ndarray) -> float:
     Returns:
         goal_func_value (float): wartośc funkcji celu
     """
-    raise NotImplementedError
+    # NARAZIE POMIJAM ILOSC PIĘTER WYSTACZY DODAC FOR PO PIĘTRACH POTEM
+    return np.sum(building.cover * ranges_matrix)
 
 
 """

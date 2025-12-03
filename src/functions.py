@@ -2,7 +2,31 @@ import data_matrices as dm
 import numpy as np
 from typing import Tuple, List
 
+FLOOR_DAMPING_PARAM = 2.0  #przykładowa wartość tłumienia podłogi między piętrami
 
+# funkcja celu pomocnicza wyliczana w punkcie
+def goal_function_point(building: dm.Building, point: dm.Point, router: dm.Point, router_power: float = 0) \
+     -> float:
+    """
+    dostaje building i punkt obliczeń i router od którego liczymy
+    liczymy w decybelach zatem logarytmy zwraca w dB
+    dostaje building i punnkt i liczy wartosc zasiegu w punkcie
+    """ 
+    
+    distance = building.get_distance(point, router)
+    if distance == 0:
+          raise ValueError("Distance between point and router cannot be zero.")
+    
+    damping = building.get_damping(point, router, FLOOR_DAMPING_PARAM)
+    
+    # Przykładowa formuła na sygnał w dB
+    signal_db = - (20 * np.log10(distance) + damping) + router_power
+
+    # TODO trzeba uwzględnić jeszcze jaki to jest router o jakiej mocy!
+    # czyli po prostu dodać do signal_db wartość mocy routera w dB
+    
+    return signal_db
+    
 def local_router_range(building: dm.Building, router_point: dm.Point, R_max: int) -> Tuple[np.ndarray, dm.Point]:
     """
     Oblicza zasięg od pojedynczego ruter, w jego istotnym otoczeniu. Wartości oblicza się w dB

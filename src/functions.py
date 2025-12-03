@@ -25,6 +25,7 @@ def goal_function_point(building: dm.Building, point: dm.Point, router: dm.Point
 
     # TODO trzeba uwzględnić jeszcze jaki to jest router o jakiej mocy!
     # czyli po prostu dodać do signal_db wartość mocy routera w dB
+    
     return signal_db
     
 

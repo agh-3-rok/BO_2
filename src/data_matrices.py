@@ -174,7 +174,7 @@ class Building:
         
         return total_thickness
 
-    def tan_to_cos_and_sin(tg_angle: float) -> tuple[float, float]:
+    def tan_to_cos_and_sin(self, tg_angle: float) -> tuple[float, float]:
         """
         funkcja pomocnicza konwertująca tangens kąta na cos i sin
         # jeśli dostanie +Inf to zwraca (0,1)
@@ -189,7 +189,7 @@ class Building:
         sin_angle = tg_angle * cos_angle
         return cos_angle, sin_angle
 
-    def claculate_line_floors(self, p1: Point, p2: Point) -> tuple[list[Point], float]:
+    def calculate_line_floors(self, p1: Point, p2: Point) -> tuple[list[Point], float]:
         """
         funkcja wyliczająca punkty końcowe i początkowe lini na danych piętrach 
         w celu wykorzytania ich do liczenia tłumienia przez ściany na konkretnych piętrach
@@ -222,11 +222,16 @@ class Building:
         # tu trzeba sprawdzić czy tangens nie jest nieskończony (czy punkty nie sa nad sobą  pionowo)
         if horizontal_distance == 0:
              tg_angle = float('inf')
+            #  tutaj trzeba po prostu potraktować że cała droga jest pokonywana na pojedynczej kratce podłogi
+            # i pokonuje gruboś piętra na niej
         else:
             tg_angle = vertical_distance / horizontal_distance 
 
         # wyliczam odległość horyzontalną na każdym z pokonywanych pięter
-        vertical_distances = self.Floor_heights/tg_angle
+        if tg_angle == float('inf'):
+            horizontal_distance = 0.0
+        else:
+            horizontal_distance = self.Floor_heights/tg_angle
 
 
         # tangens kąta nachylenia linii na piętrze w poziomie
@@ -245,13 +250,13 @@ class Building:
         cos_angle, sin_angle = self.tan_to_cos_and_sin(tg_horizontal) # funkcje tryg wyliczone z tangensa kąta poziomego
 
         # wliczam zawsze pierwsze, ostatnie pomijam (zakładam, że routery są montowane przy podłodze)
-        for f in range(f1 + 1, f2):
+        for f in range(f1, f2):
             last_point = floor_points[-1]
 
             #uwzględniamy jeszcze grubość podłogi przez którą przechodziliśmy do wyliczenia nastepnego punktu na następnym piętrze
 
-            new_x = last_point.x + vertical_distances*cos_angle
-            new_y = last_point.y + vertical_distances*sin_angle
+            new_x = last_point.x + horizontal_distance*cos_angle
+            new_y = last_point.y + horizontal_distance*sin_angle
 
             floor_points.append(Point(int(floor(new_x)), int(floor(new_y)), f)) # zaokrąglamy do najniżjszych calkowitych współrzędnych
             # żeby nie wyjść poza macierz piętra
@@ -287,13 +292,14 @@ class Building:
             # punkty na tym samym piętrze
             floor = self.Floor_list[p1.Floor_number]
             line_points = self.bresenham_2d(p1.x, p1.y, p2.x, p2.y)
+            n = len(line_points) # liczba interpolowanych puntków na linii
             for (x, y) in line_points:
                 if 0 <= x < floor.wall.shape[0] and 0 <= y < floor.wall.shape[1]:
-                    walls += floor.wall[x, y]
-            return walls
+                    walls += floor.wall[x, y]# uwzględniam wysokość piętra rozłożoną na liczbę punktów 
+            return walls, 0.0
 
         # punkty na różnych piętrach 
-        floor_points, total_floor_thickness = self.claculate_line_floors(p1, p2)
+        floor_points, total_floor_thickness = self.calculate_line_floors(p1, p2)
 
         #musi skakać co 2 bo, punkty po sobie śa na jednym piętrze -> bresenham między nimi
         for i in range(0, len(floor_points) - 1, 2):
@@ -301,9 +307,10 @@ class Building:
             fp2 = floor_points[i + 1]
             floor = self.Floor_list[fp1.Floor_number]
             line_points = self.bresenham_2d(fp1.x, fp1.y, fp2.x, fp2.y)
+            n = len(line_points) # liczba interpolowanych puntków na linii
             for (x, y) in line_points:
                 if 0 <= x < floor.wall.shape[0] and 0 <= y < floor.wall.shape[1]: 
-                    walls += floor.wall[x, y]
+                    walls += floor.wall[x, y]*(1 + (self.Floor_heights/n)**2)**0.5
 
         return walls, total_floor_thickness
         
@@ -317,3 +324,4 @@ class Building:
         total_damping = walls + floor_damping_param * total_floor_thickness
 
         return total_damping
+    

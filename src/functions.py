@@ -3,6 +3,8 @@ import numpy as np
 from typing import Tuple, List
 
 FLOOR_DAMPING_PARAM = 2.0  #przykładowa wartość tłumienia podłogi między piętrami
+TABU_LIST_LENGTH = 10  # przykładowa długość tabu listy
+MAX_ITERATIONS = 100  # przykładowa maksymalna liczba iteracji tabu search
 
 # funkcja celu pomocnicza wyliczana w punkcie
 def goal_function_point(building: dm.Building, point: dm.Point, router: dm.Point, router_power: float = 0) \
@@ -114,3 +116,60 @@ def goal_function(building: dm.Building, ranges_matrix: np.ndarray) -> float:
 - próbujuesz przyspieszyć liczenie z thresholdem - czyli tylko stosunkowo bliskie
 - ewentualnie inny sposób na ułatwienie oblieczeń
 """
+
+
+def local_change():
+    """
+    Funkcja realizująca lokalną zmianę w rozmieszczeniu ruterów - np przesunięcie jednego rutera o 1 w dowolnym kierunku
+    """
+    pass
+
+
+def aspiration_criteria():
+    """
+    Funkcja realizująca kryterium aspiracji w algorytmie tabu search
+    """
+    pass
+
+def constructive_change():
+    """
+    Funkcja realizująca konstruktywną zmianę w rozmieszczeniu ruterów -> np. inspirowaną funkcją zachłanną
+    """
+    pass
+
+
+
+def taboo_search(building: dm.Building, available_routers: list[dm.Router], tabu_length: int = TABU_LIST_LENGTH) -> Tuple[List[dm.Point], float] :
+    """
+    Realizuje algorytm tabu search dla optymalizacji rozmieszczenia ruterów w budynku
+
+    Args:
+        building (dm.Building): budynek
+        available_routers (list): lista dostępnych ruterów do rozmieszczenia
+        długość tabu listy (int)
+    Returns:
+        best_routers (list): najlepsze znalezione pozycje ruterów
+        best_goal_value (float): wartość funkcji celu dla najlepszych pozycji
+        potencjalnie inne rzeczy do rysowania wykresów itp
+    """
+    
+    num_available_routers = len(available_routers) # liczba dostępnych ruterów
+
+    # rozwiązanie to ciag 0 i indeksów w lidscię available_routers (początkowo pełna 0)
+    # każdy indeks odpowiada pozycji w dm.Building.router_possible -> czyli potencjalne miejsca na ruter
+    solution = [0]*len(dm.Building.router_possible) 
+
+    # inicjalizacja tabu listy -> do niej będą wkładane zabronione ruchy
+    tabu_list = []*tabu_length
+
+
+    for i in range(MAX_ITERATIONS):
+        # generowanie sąsiedztwa
+        # wybór najlepszego ruchu z sąsiedztwa nie będącego w tabu liście
+        # aktualizacja rozwiązania
+        # aktualizacja tabu listy
+        pass
+
+    
+
+

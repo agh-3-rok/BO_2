@@ -3,6 +3,8 @@ import pytest
 from src import data_matrices as dm
 from tests.test_data_matrices import create_floor, create_floor2, create_building
 
+# żeby odpalać funkcję w terminalu żeby było widać że printuje
+# pytest tests/test_damping_calc.py -k test_fun -s
 
 def test_horizontal_distance():
     """
@@ -56,7 +58,8 @@ def test_total_floor_thickness():
 @pytest.mark.parametrize("floor_count", [0, 1, 2])
 def test_calculate_line_floors(floor_count):
     """
-    testuje czy funkcja calculate_line_floors poprawnie wylicza punkty na linii między dwoma punktami
+    testuje czy funkcja calculate_line
+    _floors poprawnie wylicza punkty na linii między dwoma punktami
     """
 
     f1 = dm.Floor(np.zeros((10, 10)), np.zeros((10, 10)), np.zeros((10, 10)), 0, 2)
@@ -66,7 +69,7 @@ def test_calculate_line_floors(floor_count):
     building = dm.Building([f1, f2, f3], Floor_heights=3)
    
     point1 = dm.Point(x=0, y=0, Floor_number=0)
-    point2 = dm.Point(x=3, y=4, Floor_number= floor_count)
+    point2 = dm.Point(x=5, y=7, Floor_number= floor_count)
 
     if floor_count == 0:
         with pytest.raises(ValueError):
@@ -155,3 +158,6 @@ def test_get_all_walls_different_floors():
     assert walls == expected_walls
     assert total_thickness == total_floor_thickness
 
+def test_damping_further():
+    #TODO testuj dalej
+    pass

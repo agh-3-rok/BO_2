@@ -119,27 +119,43 @@ def goal_function(building: dm.Building, ranges_matrix: np.ndarray) -> float:
 
 
 def local_change():
+    #TODO
     """
     Funkcja realizująca lokalną zmianę w rozmieszczeniu ruterów - np przesunięcie jednego rutera o 1 w dowolnym kierunku
+
+    Returns: 
+    całe nowe rozwiązanie czyli (zobacz w tabu_search) listę indeksów rozmieszczenia ruterów
     """
     pass
 
 
 def aspiration_criteria():
+    #TODO
     """
     Funkcja realizująca kryterium aspiracji w algorytmie tabu search
+
+    Returns:
+    nie wiem w sumie XD
     """
     pass
 
-def constructive_change():
+def constructive_change(building: dm.Building, current_solution: List[int]) -> List[int]:
+    #TODO
     """
-    Funkcja realizująca konstruktywną zmianę w rozmieszczeniu ruterów -> np. inspirowaną funkcją zachłanną
+    Funkcja realizująca konstruktywną zmianę w rozmieszczeniu ruterów -> np. inspirowaną funkcją zachłanną czy tam coś co opisywaliśmy
+
+    args:
+    building
+
+
+    Returns:
+    całe nowe rozwiązanie czyli (zobacz w tabu_search) listę indeksów rozmieszczenia ruterów
     """
     pass
 
 
 
-def taboo_search(building: dm.Building, available_routers: list[dm.Router], tabu_length: int = TABU_LIST_LENGTH) -> Tuple[List[dm.Point], float] :
+def tabu_search(building: dm.Building, available_routers: list[dm.Router], tabu_length: int = TABU_LIST_LENGTH) -> Tuple[List[dm.Point], float] :
     """
     Realizuje algorytm tabu search dla optymalizacji rozmieszczenia ruterów w budynku
 
@@ -157,13 +173,17 @@ def taboo_search(building: dm.Building, available_routers: list[dm.Router], tabu
 
     # rozwiązanie to ciag 0 i indeksów w lidscię available_routers (początkowo pełna 0)
     # każdy indeks odpowiada pozycji w dm.Building.router_possible -> czyli potencjalne miejsca na ruter
-    solution = [0]*len(dm.Building.router_possible) 
+    best_solution = [0]*len(dm.Building.router_possible) 
 
     # inicjalizacja tabu listy -> do niej będą wkładane zabronione ruchy
     tabu_list = []*tabu_length
 
+    # generujemy początkowe rozwiązanie
+    #TODO - ogarnąć jak to chcemy robić -> dużo opcji można np. losowo
+    current_solution = constructive_change(building, best_solution)
 
     for i in range(MAX_ITERATIONS):
+        #TODO
         # generowanie sąsiedztwa
         # wybór najlepszego ruchu z sąsiedztwa nie będącego w tabu liście
         # aktualizacja rozwiązania

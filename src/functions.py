@@ -83,7 +83,6 @@ def agregation_func(building: dm.Building, local_ranges: List[Tuple[np.ndarray, 
         if global_r_start >= global_r_end or global_c_start >= global_c_end:
             continue
 
-        # --- Agregacja (MAX) ---
         # Bierzemy max z tego co już jest na mapie vs nowy wycinek
         current_slice = global_map[global_r_start:global_r_end, global_c_start:global_c_end]
         new_slice = local_grid[local_r_start:local_r_end, local_c_start:local_c_end]

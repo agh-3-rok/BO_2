@@ -15,7 +15,7 @@ def goal_function_point(building: dm.Building, point: dm.Point, router: dm.Point
     dostaje building i punnkt i liczy wartosc zasiegu w punkcie
     """ 
     
-    distance = building.get_distance(point, router)
+    distance = building.point_distance(point, router)
     if distance == 0:
           raise ValueError("Distance between point and router cannot be zero.")
     
@@ -43,7 +43,18 @@ def local_router_range(building: dm.Building, router_point: dm.Point, R_max: int
     
     krotka z tych dwóch?
     """ 
-    raise NotImplementedError
+    router_square = np.zeros((R_max, R_max))
+    
+    #x, y współrzędne lewego górnego rogu 
+    left_upper_x = router_point.x - R_max // 2
+    left_upper_y = router_point.y - R_max // 2
+    
+    for i in range(R_max):
+        for j in range(R_max):
+            if (left_upper_x + i, left_upper_y + j) != (router_point.x, router_point.y):
+                router_square[i, j] = goal_function_point(building, dm.Point(left_upper_x + i, left_upper_y + j, 0), router_point, 2)
+    
+    return router_square, router_point
 
 
 def agregation_func(building: dm.Building, local_ranges: List[Tuple[np.ndarray, dm.Point]]) -> np.ndarray:

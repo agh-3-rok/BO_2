@@ -73,6 +73,10 @@ agregation_matrix = np.array(
     ]
 )
 
+
+macierz = functions.local_router_range(budynek, data_matrices.Point(1,6, 0), 4)
+print(macierz)
+
 # Teraz mini testy do funkcji drugiej - agregującej nalezy stworzyć liste krotek - macierz i jej lewy górny róg - to co zwraca local_router_range
 local_ranges = [
     (np.array([[7, 7, 7, 7], [8, 8, 8, 7], [8, 9, 8, 7], [8, 8, 8, 7]]), (4, 0)),
@@ -81,4 +85,4 @@ local_ranges = [
 ]
 
 # print(functions.goal_function(budynek.Floor_list[0], agregation_matrix))
-print(functions.agregation_func(budynek, local_ranges))
+# print(functions.agregation_func(budynek, local_ranges))

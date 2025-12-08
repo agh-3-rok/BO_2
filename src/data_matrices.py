@@ -345,4 +345,9 @@ class Building:
 
 class Router:
     #TODO
+
+    def __init__(self, Power: float, Max_users: int):
+        self.power = Power
+        self.max_users = Max_users
+
     pass

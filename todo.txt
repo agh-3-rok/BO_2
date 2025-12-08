@@ -18,3 +18,4 @@ co zrobić:
 - (P/W) zaimplementować rozwiązanie "konstrukcyjne" (przynajmniej jedna wersja) -> potancjalnie może być głupie XD 
 
 
+później:

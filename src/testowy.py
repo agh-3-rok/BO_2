@@ -56,7 +56,11 @@ pietro = data_matrices.Floor(
 budynek = data_matrices.Building(
     Floors=[pietro],
     Floor_heights=2.5,
+    available_routers=[data_matrices.Router(2,10), data_matrices.Router(2,10)]
 )
+
+print(budynek.router_possible)
+print(budynek.router_locations)
 
 # print(budynek.router_possible)
 # print(budynek.points_to_calculate)
@@ -89,15 +93,15 @@ router_square3, router_point3 = functions.local_router_range(budynek, router_poi
 
 local_ragnes2 = [(router_square1, router_point1), (router_square2, router_point2), (router_square3, router_point3)]
 
-print(router_point1)
-print(router_point2)
-print(router_point3)
+# print(router_point1)
+# print(router_point2)
+# print(router_point3)
 
-print(router_square1)
-print(router_square2)
-print(router_square3)
+# print(router_square1)
+# print(router_square2)
+# print(router_square3)
 
-agregation_matrix = functions.agregation_func(budynek, local_ragnes2)
-print(agregation_matrix)
+# agregation_matrix = functions.agregation_func(budynek, local_ragnes2)
+# print(agregation_matrix)
 
-print(functions.goal_function(budynek.Floor_list[0], agregation_matrix))
+# print(functions.goal_function(budynek.Floor_list[0], agregation_matrix))

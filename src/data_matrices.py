@@ -13,10 +13,10 @@ class Point:
 
     def __repr__(self):
         return f"{self.x, self.y, self.Floor_number}"
-    
+
 
 class Router:
-    #TODO
+    # TODO
 
     def __init__(self, Power: float, Max_users: int):
         self.power = Power
@@ -52,7 +52,6 @@ class Floor:
         cover_matrix,
         Floor_number: int,
         Floor_thickness: float,
-        router_locations: List
     ):
 
         # chcemy mieć pewność że wszystkie macierze mają ten sam rozmiar
@@ -67,13 +66,15 @@ class Floor:
         self.cover = cover_matrix
         self.Floor_number = Floor_number  # to w sumie nie jest potrzebn
         self.Floor_thickness = Floor_thickness
-        
+
 
 class Building:
     # obiekt przechowujący budynek składający się z pięter
     # zawiera listę pięter
 
-    def __init__(self, Floors: list[Floor], Floor_heights: int):
+    def __init__(
+        self, Floors: list[Floor], Floor_heights: int, available_routers: list[Router]
+    ):
         self.Floor_list = Floors
         self.router_possible = (
             self.__get_possible_router_positions()
@@ -82,8 +83,8 @@ class Building:
             self.__get_points_to_calculate()
         )  # od razu buduje liste punktów do obliczenia zasięgu dla łatwiejszego dostępu
         self.Floor_heights = Floor_heights
-        router_locations = []
-        
+        self.router_locations = self.__initial_solution(available_routers)
+
     def __get_possible_router_positions(self) -> List:
         """
         Zwraca listę krotek (x, y, Floor_number) z możliwymi pozycjami routerów w całym budynku
@@ -92,7 +93,9 @@ class Building:
         for fl in self.Floor_list:
             for x in range(fl.router.shape[0]):
                 for y in range(fl.router.shape[1]):
-                    if fl.router[x, y] == 1:  # zakładamy, że 1 oznacza dozwoloną pozycję
+                    if (
+                        fl.router[x, y] == 1
+                    ):  # zakładamy, że 1 oznacza dozwoloną pozycję
                         possible_positions.append(Point(x, y, fl.Floor_number))
 
         return possible_positions
@@ -111,7 +114,7 @@ class Building:
                         points_to_calculate.append(Point(x, y, fl.Floor_number))
 
         return np.array(points_to_calculate)
-    
+
     def __initial_solution(self, available_routers: list[Router]) -> List[int]:
         """
         funkcja generująca początkowe rozwiązanie dla tabu search (np. losowe)
@@ -120,7 +123,9 @@ class Building:
             building (dm.Building): budynek
             available_routers (list): lista dostępnych ruterów do rozmieszczenia
         Returns:
-            initial_solution (list): początkowe rozmieszczenie ruterów
+            initial_solution (list): początkowe rozmieszczenie ruterów. np:
+            [(1, 1, 1), (6, 1, 1), (6, 6, 1)] - możliwe pozycje dla ruterów
+            [0, 1, -1] - na pozycji (1,1,1) - ruter0, na pozycji (6,1,1) - ruter1, na pozycji (6,6,1) - brak rutera
 
         """
 
@@ -128,17 +133,19 @@ class Building:
         num_available_routers = len(available_routers)
 
         # Inicjalizacja rozwiązania z samymi zerami
-        solution = [0] * num_possible_positions
+        solution = [-1] * num_possible_positions
 
         # Losowe rozmieszczenie ruterów
-        chosen_positions = np.random.choice(num_possible_positions, num_available_routers, replace=False)
+        chosen_positions = np.random.choice(
+            num_possible_positions, num_available_routers, replace=False
+        )
         router_num = 0
         for pos in chosen_positions:
             solution[pos] = router_num  # Oznaczamy miejsce jako zajęte przez ruter
             router_num += 1
-        
+
         return solution
-    
+
     def vertical_distance(self, floor1: int, floor2: int) -> int:
         """
         pomocnicza metoda licząca dystans pionowy między piętrami
@@ -153,7 +160,7 @@ class Building:
 
         for i in range(min_floor, max_floor):
             z += self.Floor_list[i].Floor_thickness + self.Floor_heights
-        
+
         return z
 
     def horizontal_distance(self, point1: Point, point2: Point) -> float:
@@ -163,7 +170,7 @@ class Building:
         """
         x = point1.x - point2.x
         y = point1.y - point2.y
-        return (x**2 + y**2)**0.5
+        return (x**2 + y**2) ** 0.5
 
     def point_distance(self, point1: Point, point2: Point) -> float:
         """
@@ -174,7 +181,7 @@ class Building:
         z = self.vertical_distance(point1.Floor_number, point2.Floor_number)
         x = point1.x - point2.x
         y = point1.y - point2.y
-        return (x**2 + y**2 + z**2)**0.5
+        return (x**2 + y**2 + z**2) ** 0.5
 
     def bresenham_2d(self, x1: int, y1: int, x2: int, y2: int) -> List[tuple[int, int]]:
         """
@@ -223,7 +230,7 @@ class Building:
 
         for i in range(min_floor, max_floor):
             total_thickness += self.Floor_list[i].Floor_thickness
-        
+
         return total_thickness
 
     def tan_to_cos_and_sin(self, tg_angle: float) -> tuple[float, float]:
@@ -232,18 +239,18 @@ class Building:
         # jeśli dostanie +Inf to zwraca (0,1)
         # jeśli dostanie -Inf to zwraca (0,-1)
         """
-        if tg_angle == float('inf'):
+        if tg_angle == float("inf"):
             return 0.0, 1.0
-        if tg_angle == float('-inf'):
+        if tg_angle == float("-inf"):
             return 0.0, -1.0
-        
-        cos_angle = 1 / (1 + tg_angle**2)**0.5
+
+        cos_angle = 1 / (1 + tg_angle**2) ** 0.5
         sin_angle = tg_angle * cos_angle
         return cos_angle, sin_angle
 
     def calculate_line_floors(self, p1: Point, p2: Point) -> tuple[list[Point], float]:
         """
-        funkcja wyliczająca punkty końcowe i początkowe lini na danych piętrach 
+        funkcja wyliczająca punkty końcowe i początkowe lini na danych piętrach
         w celu wykorzytania ich do liczenia tłumienia przez ściany na konkretnych piętrach
         oraz całkowitą grubość podłóg pokonanych między punktami
 
@@ -252,13 +259,12 @@ class Building:
         lista punktów jest o jeden za długa -> ostatni punkt to punkt docelowy p2 (zakładamy, że zaraz przy podłodze, zatem pomijamy drogę na piętrze docelowym)
 
         """
-        #TODO: obsługa przypadku gdy p1 i p2 są pionowo nad sobą
-        #TODO: dostałeś ten sam punkt 2 razy
+        # TODO: obsługa przypadku gdy p1 i p2 są pionowo nad sobą
+        # TODO: dostałeś ten sam punkt 2 razy
 
         # szeregowanie wyższe niższ punkt
         p_lower = p1 if p1.Floor_number < p2.Floor_number else p2
-        p_higher = p2 if p1.Floor_number < p2.Floor_number else p1  
-        
+        p_higher = p2 if p1.Floor_number < p2.Floor_number else p1
 
         # piętro niższe i wyższe
         f1 = p_lower.Floor_number
@@ -267,60 +273,75 @@ class Building:
         if f1 == f2:
             raise ValueError("Punkty muszą być na różnych piętrach.")
 
-        vertical_distance = self.vertical_distance(f1, f2) # cały pionowy dystans między puntkami podłogi + piętra
-        horizontal_distance = self.horizontal_distance(p1, p2) # poziomy dystans między punktami na piętrze
+        vertical_distance = self.vertical_distance(
+            f1, f2
+        )  # cały pionowy dystans między puntkami podłogi + piętra
+        horizontal_distance = self.horizontal_distance(
+            p1, p2
+        )  # poziomy dystans między punktami na piętrze
 
         # tangens kąta nachylenia linii między punktami
         # tu trzeba sprawdzić czy tangens nie jest nieskończony (czy punkty nie sa nad sobą  pionowo)
         if horizontal_distance == 0:
-             tg_angle = float('inf')
-            #  tutaj trzeba po prostu potraktować że cała droga jest pokonywana na pojedynczej kratce podłogi
-            # i pokonuje gruboś piętra na niej
+            tg_angle = float("inf")
+        #  tutaj trzeba po prostu potraktować że cała droga jest pokonywana na pojedynczej kratce podłogi
+        # i pokonuje gruboś piętra na niej
         else:
-            tg_angle = vertical_distance / horizontal_distance 
+            tg_angle = vertical_distance / horizontal_distance
 
         # wyliczam odległość horyzontalną na każdym z pokonywanych pięter
-        if tg_angle == float('inf'):
+        if tg_angle == float("inf"):
             horizontal_distance = 0.0
         else:
-            horizontal_distance = self.Floor_heights/tg_angle
-
+            horizontal_distance = self.Floor_heights / tg_angle
 
         # tangens kąta nachylenia linii na piętrze w poziomie
         # ponownie trzeba sprawdzić czy tangens nie jest nieskończony -> w równoległa z OY
         # uwzględniamy znak
         if (p2.x - p1.x) == 0:
             if p2.y - p1.y > 0:
-                tg_horizontal = float('inf')
+                tg_horizontal = float("inf")
             else:
-                tg_horizontal = float('-inf')
+                tg_horizontal = float("-inf")
         else:
-            tg_horizontal = (p2.y - p1.y)/(p2.x - p1.x)  if (p2.x - p1.x) != 0 else float('inf')
+            tg_horizontal = (
+                (p2.y - p1.y) / (p2.x - p1.x) if (p2.x - p1.x) != 0 else float("inf")
+            )
 
         # teraz wyliczam punkty do Breshama na konkretnych piętrach (początek i koniec lini przez piętro żeby nakarmić bresenhama)
         floor_points = [p_lower]
-        cos_angle, sin_angle = self.tan_to_cos_and_sin(tg_horizontal) # funkcje tryg wyliczone z tangensa kąta poziomego
+        cos_angle, sin_angle = self.tan_to_cos_and_sin(
+            tg_horizontal
+        )  # funkcje tryg wyliczone z tangensa kąta poziomego
 
         # wliczam zawsze pierwsze, ostatnie pomijam (zakładam, że routery są montowane przy podłodze)
         for f in range(f1, f2):
             last_point = floor_points[-1]
 
-            #uwzględniamy jeszcze grubość podłogi przez którą przechodziliśmy do wyliczenia nastepnego punktu na następnym piętrze
+            # uwzględniamy jeszcze grubość podłogi przez którą przechodziliśmy do wyliczenia nastepnego punktu na następnym piętrze
 
-            new_x = last_point.x + horizontal_distance*cos_angle
-            new_y = last_point.y + horizontal_distance*sin_angle
+            new_x = last_point.x + horizontal_distance * cos_angle
+            new_y = last_point.y + horizontal_distance * sin_angle
 
-            floor_points.append(Point(int(floor(new_x)), int(floor(new_y)), f)) # zaokrąglamy do najniżjszych calkowitych współrzędnych
+            floor_points.append(
+                Point(int(floor(new_x)), int(floor(new_y)), f)
+            )  # zaokrąglamy do najniżjszych calkowitych współrzędnych
             # żeby nie wyjść poza macierz piętra
 
-            #uwzględniamy jeszcze grubość podłogi przez którą przechodziliśmy do wyliczenia nastepnego punktu na następnym piętrze
+            # uwzględniamy jeszcze grubość podłogi przez którą przechodziliśmy do wyliczenia nastepnego punktu na następnym piętrze
             # które na pewno istnieje
-            x_after_floor = new_x + self.Floor_list[f + 1].Floor_thickness * cos_angle / tg_angle
-            y_after_floor = new_y + self.Floor_list[f + 1].Floor_thickness * sin_angle / tg_angle
-            p_after_floor = Point(int(floor(x_after_floor)), int(floor(y_after_floor)), f + 1)
+            x_after_floor = (
+                new_x + self.Floor_list[f + 1].Floor_thickness * cos_angle / tg_angle
+            )
+            y_after_floor = (
+                new_y + self.Floor_list[f + 1].Floor_thickness * sin_angle / tg_angle
+            )
+            p_after_floor = Point(
+                int(floor(x_after_floor)), int(floor(y_after_floor)), f + 1
+            )
             floor_points.append(p_after_floor)
 
-        #ostatni punkt nie jest potrzebny on powinien pokrywac się z p_higher
+        # ostatni punkt nie jest potrzebny on powinien pokrywac się z p_higher
 
         # teraz wyliczam grubość drogi poświęconej na podłogi jako różnice całej drogi od dystansu na piętrach
         total_floor_thickness = self.total_floor_thickness(f1, f2)
@@ -337,36 +358,40 @@ class Building:
         """
         # TODO: usunąć sprawdzanie cały czas czy punkt jest w tablicy
 
-        walls = 0 # tłumienie ścian
+        walls = 0  # tłumienie ścian
 
-        #obłsuga przypadku gdy punkty są na tym samym piętrze -> od razu bresenham
+        # obłsuga przypadku gdy punkty są na tym samym piętrze -> od razu bresenham
         if p1.Floor_number == p2.Floor_number:
             # punkty na tym samym piętrze
             floor = self.Floor_list[p1.Floor_number]
             line_points = self.bresenham_2d(p1.x, p1.y, p2.x, p2.y)
-            n = len(line_points) # liczba interpolowanych puntków na linii
-            for (x, y) in line_points:
+            n = len(line_points)  # liczba interpolowanych puntków na linii
+            for x, y in line_points:
                 if 0 <= x < floor.wall.shape[0] and 0 <= y < floor.wall.shape[1]:
-                    walls += floor.wall[x, y]# uwzględniam wysokość piętra rozłożoną na liczbę punktów 
+                    walls += floor.wall[
+                        x, y
+                    ]  # uwzględniam wysokość piętra rozłożoną na liczbę punktów
             return walls, 0.0
 
-        # punkty na różnych piętrach 
+        # punkty na różnych piętrach
         floor_points, total_floor_thickness = self.calculate_line_floors(p1, p2)
 
-        #musi skakać co 2 bo, punkty po sobie śa na jednym piętrze -> bresenham między nimi
-        #TODO : obsługa przypadku gdy punkty są pionowo nad sobą
+        # musi skakać co 2 bo, punkty po sobie śa na jednym piętrze -> bresenham między nimi
+        # TODO : obsługa przypadku gdy punkty są pionowo nad sobą
         for i in range(0, len(floor_points) - 1, 2):
             fp1 = floor_points[i]
             fp2 = floor_points[i + 1]
             floor = self.Floor_list[fp1.Floor_number]
             line_points = self.bresenham_2d(fp1.x, fp1.y, fp2.x, fp2.y)
-            n = len(line_points) # liczba interpolowanych puntków na linii
-            for (x, y) in line_points:
-                if 0 <= x < floor.wall.shape[0] and 0 <= y < floor.wall.shape[1]: 
-                    walls += floor.wall[x, y]*(1 + (self.Floor_heights/n)**2)**0.5
+            n = len(line_points)  # liczba interpolowanych puntków na linii
+            for x, y in line_points:
+                if 0 <= x < floor.wall.shape[0] and 0 <= y < floor.wall.shape[1]:
+                    walls += (
+                        floor.wall[x, y] * (1 + (self.Floor_heights / n) ** 2) ** 0.5
+                    )
 
         return walls, total_floor_thickness
-        
+
     def get_damping(self, p1: Point, p2: Point, floor_damping_param) -> float:
         """
         funckja licząca tłumienie między piętrami
@@ -377,7 +402,6 @@ class Building:
         total_damping = walls + floor_damping_param * total_floor_thickness
 
         return total_damping
-
 
 
 def euclidean_distance(point1: np.ndarray, point2: np.ndarray) -> float:

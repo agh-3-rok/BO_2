@@ -4,6 +4,27 @@ import numpy as np
 from typing import List
 from math import floor
 
+
+class Point:
+    def __init__(self, x: int, y: int, Floor_number: int):
+        self.x = x
+        self.y = y
+        self.Floor_number = Floor_number
+
+    def __repr__(self):
+        return f"{self.x, self.y, self.Floor_number}"
+    
+
+class Router:
+    #TODO
+
+    def __init__(self, Power: float, Max_users: int):
+        self.power = Power
+        self.max_users = Max_users
+
+    pass
+
+
 class Floor:
     """Przechowuje topografię pojedynczego piętra.
 
@@ -31,6 +52,7 @@ class Floor:
         cover_matrix,
         Floor_number: int,
         Floor_thickness: float,
+        router_locations: List
     ):
 
         # chcemy mieć pewność że wszystkie macierze mają ten sam rozmiar
@@ -45,21 +67,7 @@ class Floor:
         self.cover = cover_matrix
         self.Floor_number = Floor_number  # to w sumie nie jest potrzebn
         self.Floor_thickness = Floor_thickness
-
-
-def euclidean_distance(point1: np.ndarray, point2: np.ndarray) -> float:
-    return np.sqrt(np.sum((point1 - point2) ** 2))
-
-
-class Point:
-    def __init__(self, x: int, y: int, Floor_number: int):
-        self.x = x
-        self.y = y
-        self.Floor_number = Floor_number
-
-    def __repr__(self):
-        return f"{self.x, self.y, self.Floor_number}"
-
+        
 
 class Building:
     # obiekt przechowujący budynek składający się z pięter
@@ -74,7 +82,8 @@ class Building:
             self.__get_points_to_calculate()
         )  # od razu buduje liste punktów do obliczenia zasięgu dla łatwiejszego dostępu
         self.Floor_heights = Floor_heights
-
+        router_locations = []
+        
     def __get_possible_router_positions(self) -> List:
         """
         Zwraca listę krotek (x, y, Floor_number) z możliwymi pozycjami routerów w całym budynku
@@ -102,6 +111,33 @@ class Building:
                         points_to_calculate.append(Point(x, y, fl.Floor_number))
 
         return np.array(points_to_calculate)
+    
+    def __initial_solution(self, available_routers: list[Router]) -> List[int]:
+        """
+        funkcja generująca początkowe rozwiązanie dla tabu search (np. losowe)
+
+        Args:
+            building (dm.Building): budynek
+            available_routers (list): lista dostępnych ruterów do rozmieszczenia
+        Returns:
+            initial_solution (list): początkowe rozmieszczenie ruterów
+
+        """
+
+        num_possible_positions = len(self.router_possible)
+        num_available_routers = len(available_routers)
+
+        # Inicjalizacja rozwiązania z samymi zerami
+        solution = [0] * num_possible_positions
+
+        # Losowe rozmieszczenie ruterów
+        chosen_positions = np.random.choice(num_possible_positions, num_available_routers, replace=False)
+        router_num = 0
+        for pos in chosen_positions:
+            solution[pos] = router_num  # Oznaczamy miejsce jako zajęte przez ruter
+            router_num += 1
+        
+        return solution
     
     def vertical_distance(self, floor1: int, floor2: int) -> int:
         """
@@ -341,13 +377,8 @@ class Building:
         total_damping = walls + floor_damping_param * total_floor_thickness
 
         return total_damping
-    
 
-class Router:
-    #TODO
 
-    def __init__(self, Power: float, Max_users: int):
-        self.power = Power
-        self.max_users = Max_users
 
-    pass
+def euclidean_distance(point1: np.ndarray, point2: np.ndarray) -> float:
+    return np.sqrt(np.sum((point1 - point2) ** 2))

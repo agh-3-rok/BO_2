@@ -60,6 +60,7 @@ def local_router_range(building: dm.Building, router_point: dm.Point, R_max: int
 
 def agregation_func(building: dm.Building, local_ranges: List[Tuple[np.ndarray, dm.Point]]) -> np.ndarray:
     """
+    FUNKCAJ UŻYWANA PRZY INICJALIZACJI - LICZY DLA WSZYSTKICH RUTERÓW 
     Funkcja realizuje wzór na agregację/max sygnału, wykorzystując lokalne zasięgi od ruterów oblicza całą siatkę zasięgów.
 
     Args:
@@ -105,6 +106,9 @@ def agregation_func(building: dm.Building, local_ranges: List[Tuple[np.ndarray, 
 
     return global_map
     
+
+
+
 
 def goal_function(building: dm.Building, ranges_matrix: np.ndarray) -> float:
     """
@@ -163,33 +167,6 @@ def constructive_change(building: dm.Building, current_solution: List[int], rout
     całe nowe rozwiązanie czyli (zobacz w tabu_search) listę indeksów rozmieszczenia ruterów
     """
     pass
-
-def initial_solution(building: dm.Building, available_routers: list[dm.Router]) -> List[int]:
-    """
-    funkcja generująca początkowe rozwiązanie dla tabu search (np. losowe)
-
-    Args:
-        building (dm.Building): budynek
-        available_routers (list): lista dostępnych ruterów do rozmieszczenia
-    Returns:
-        initial_solution (list): początkowe rozmieszczenie ruterów
-
-    """
-
-    num_possible_positions = len(building.router_possible)
-    num_available_routers = len(available_routers)
-
-    # Inicjalizacja rozwiązania z samymi zerami
-    solution = [0] * num_possible_positions
-
-    # Losowe rozmieszczenie ruterów
-    chosen_positions = np.random.choice(num_possible_positions, num_available_routers, replace=False)
-    router_num = 0
-    for pos in chosen_positions:
-        solution[pos] = router_num  # Oznaczamy miejsce jako zajęte przez ruter
-        router_num += 1
-    
-    return solution
 
 def tabu_search(building: dm.Building, available_routers: list[dm.Router], tabu_length: int = TABU_LIST_LENGTH) -> Tuple[List[dm.Point], float] :
     """

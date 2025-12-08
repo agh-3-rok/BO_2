@@ -4,6 +4,11 @@ import numpy as np
 from typing import List
 from math import floor
 
+FLOOR_DAMPING_PARAM = 2.0  #przykładowa wartość tłumienia podłogi między piętrami
+TABU_LIST_LENGTH = 10  # przykładowa długość tabu listy
+MAX_ITERATIONS = 100  # przykładowa maksymalna liczba iteracji tabu search
+
+
 class Point:
     def __init__(self, x: int, y: int, Floor_number: int):
         self.x = x
@@ -391,10 +396,86 @@ class Building:
         total_damping = walls + floor_damping_param * total_floor_thickness
 
         return total_damping
+    
+    def goal_function_point(self, point: Point, router: Point, router_power: float = 0) -> float:
+        """
+        dostaje building i punkt obliczeń i router od którego liczymy
+        liczymy w decybelach zatem logarytmy zwraca w dB
+        dostaje building i punnkt i liczy wartosc zasiegu w punkcie
+        """ 
+        
+        distance = self.point_distance(point, router)
+        if distance == 0:
+            raise ValueError("Distance between point and router cannot be zero.")
+        
+        damping = self.get_damping(point, router, FLOOR_DAMPING_PARAM)
+        
+        # Przykładowa formuła na sygnał w dB
+        signal_db = - (20 * np.log10(distance) + damping) + router_power
+
+        # TODO trzeba uwzględnić jeszcze jaki to jest router o jakiej mocy!
+        # czyli po prostu dodać do signal_db wartość mocy routera w dB
+        
+        return signal_db
+    
+    def agregation_func(self, routers: List[Router]) -> np.ndarray:
+        """
+        Funkcja realizuje wzór na agregację/max sygnału, wykorzystując obiekty Router z ich kratkami zasięgu.
+        Oblicza całą siatkę zasięgów jako maximum ze wszystkich routerów.
+
+        Args:
+            building (dm.Building): budynek
+            routers (List[dm.Router]): lista routerów z obliczonymi kratkami zasięgu (coverage_grid)
+            
+        Returns:
+            ranges (np.ndarray): globalna siatka zasięgów (maximum ze wszystkich routerów)
+        """
+        
+        # NARAZIE POMIJAM ILOSC PIĘTER WYSTACZY DODAC FOR PO PIĘTRACH POTEM
+        pietro = self.Floor_list[0]
+        H, W = pietro.wall.shape
+        
+        global_map = np.zeros((H, W), dtype=float)
+        
+        # Dla każdego routera agreguj jego kratkę zasięgu do mapy globalnej
+        for router in routers:
+            # Pomiń routery bez obliczonej kratki
+            if router.coverage_grid is None or router.grid_corner is None:
+                continue
+            
+            local_grid = router.coverage_grid
+            start_row, start_col = router.grid_corner
+            
+            # Wymiary małego wycinka
+            h_local, w_local = local_grid.shape
+
+            # Sprawdzamy, gdzie wycinek realnie zaczyna się i kończy na mapie globalnej
+            global_r_start = max(0, start_row)
+            global_r_end = min(H, start_row + h_local)
+            global_c_start = max(0, start_col)
+            global_c_end = min(W, start_col + w_local)
+
+            # Sprawdzamy, które fragmenty wycinka lokalnego odpowiadają tym zakresom
+            # (Jeśli start_row < 0, musimy uciąć początek wycinka lokalnego)
+            local_r_start = global_r_start - start_row
+            local_r_end = local_r_start + (global_r_end - global_r_start)
+            local_c_start = global_c_start - start_col
+            local_c_end = local_c_start + (global_c_end - global_c_start)
+        
+            # Jeśli wycinek jest całkowicie poza mapą, pomijamy
+            if global_r_start >= global_r_end or global_c_start >= global_c_end:
+                continue
+
+            # Bierzemy max z tego co już jest na mapie vs nowy wycinek
+            current_slice = global_map[global_r_start:global_r_end, global_c_start:global_c_end]
+            new_slice = local_grid[local_r_start:local_r_end, local_c_start:local_c_end]
+            
+            global_map[global_r_start:global_r_end, global_c_start:global_c_end] = np.maximum(current_slice, new_slice)
+
+        return global_map
 
 
-def euclidean_distance(point1: np.ndarray, point2: np.ndarray) -> float:
-    return np.sqrt(np.sum((point1 - point2) ** 2))
+
 
 
 class Router:
@@ -429,7 +510,7 @@ class Router:
         for i in range(self.max_range):
             for j in range(self.max_range):
                 if (left_upper_x + i, left_upper_y + j) != (self.position.x, self.position.y):
-                    local_router_square[i, j] = 10**(goal_function_point(building, Point(left_upper_x + i, left_upper_y + j, 0), self.position, 2)/10)
+                    local_router_square[i, j] = 10**(building.goal_function_point(Point(left_upper_x + i, left_upper_y + j, 0), self.position, 2)/10)
                 else:
                     local_router_square[i, j] = 3 #WARTOŚĆ SYGNAŁU W MIEJSCU RUTERA
         

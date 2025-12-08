@@ -2,7 +2,7 @@ Do zrobienia:
 
 z zeszłego tygodnia
 - (P)przetestować fizykę -> czy na pewno dobrze wyliczane są kolejne punkty przechodzenia przez podłogę!
-- (W) zintegorować liczenie funkcji celu
+- (W) zintegorować liczenie funkcji celu  DONE
 
 Cel na ten tydzień: działający algorytm taboo search (pierwszy protoptyp)
 

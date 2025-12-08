@@ -20,7 +20,7 @@ wall_matrix = np.array(
 router_matrix = np.array(
     [
         [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 1, 0],
+        [0, 1, 0, 0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0, 0, 0],
@@ -83,9 +83,9 @@ local_ranges = [
 
 
 
-router_square1, router_point1 = functions.local_router_range(budynek, router_point=data_matrices.Point(1,6, 0), R_max=5)
-router_square2, router_point2 = functions.local_router_range(budynek, router_point=data_matrices.Point(6,1, 0), R_max=5)
-router_square3, router_point3 = functions.local_router_range(budynek, router_point=data_matrices.Point(6,6, 0), R_max=5)
+router_square1, router_point1 = functions.local_router_range(budynek, router_point=data_matrices.Point(1,1, 0), R_max=9)
+router_square2, router_point2 = functions.local_router_range(budynek, router_point=data_matrices.Point(6,1, 0), R_max=9)
+router_square3, router_point3 = functions.local_router_range(budynek, router_point=data_matrices.Point(6,6, 0), R_max=9)
 
 local_ragnes2 = [(router_square1, router_point1), (router_square2, router_point2), (router_square3, router_point3)]
 

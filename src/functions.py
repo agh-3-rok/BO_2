@@ -57,6 +57,9 @@ def local_router_range(building: dm.Building, router_point: dm.Point, R_max: int
                 local_router_square[i, j] = 3 #WARTOŚĆ SYGNAŁU W MIEJSCU RUTERA
     return local_router_square, (left_upper_x, left_upper_y)
 
+def trnsform_current_location_into_local_ranges():
+    raise NotImplementedError
+
 
 def agregation_func(building: dm.Building, local_ranges: List[Tuple[np.ndarray, dm.Point]]) -> np.ndarray:
     """
@@ -133,15 +136,40 @@ def goal_function(building: dm.Building, ranges_matrix: np.ndarray) -> float:
 """
 
 
-def local_change(current_solution: List[int]) -> List[List[int]]:
-    #TODO
+def _local_change(solution: List[int]) -> List[List[int]]:
     """
-    Funkcja realizująca lokalną zmianę w rozmieszczeniu ruterów - np przesunięcie jednego rutera o 1 w dowolnym kierunku
-
-    Returns: 
-    powinna zwracać listę wszytkich możliwych ruchów lokalnych w otoczniu, które chcemy sprawdzić
+    Generuje sąsiedztwo poprzez lokalne zmiany.
+    
+    Typy ruchów:
+    - Przesunięcie routera do sąsiedniej pozycji
+    - Zamiana pozycji dwóch routerów
     """
-    pass
+    neighborhood = []
+    num_possible = len(solution)
+    
+    # znajdź pozycje z routerami
+    router_positions = [i for i, val in enumerate(solution) if val > 0]
+    
+    # przesuń każdy router do wolnej pozycji
+    for pos in router_positions:
+        router_id = solution[pos]
+        
+        #sprawdź wszystkie wolne pozycje
+        for neighbor_pos in range(num_possible):
+            if solution[neighbor_pos] == 0:  # wolna pozycja
+                new_solution = solution.copy()
+                new_solution[pos] = 0
+                new_solution[neighbor_pos] = router_id
+                neighborhood.append(new_solution)
+    
+    # zamień pozycje dwóch routerów
+    for i, pos1 in enumerate(router_positions):
+        for pos2 in router_positions[i+1:]:
+            new_solution = solution.copy()
+            new_solution[pos1], new_solution[pos2] = new_solution[pos2], new_solution[pos1]
+            neighborhood.append(new_solution)
+    
+    return neighborhood
 
 def aspiration_criteria(neighbor, best_value, best_solution) -> bool:
     #TODO

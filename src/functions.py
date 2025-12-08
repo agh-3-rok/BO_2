@@ -43,7 +43,7 @@ def local_router_range(building: dm.Building, router_point: dm.Point, R_max: int
     
     krotka z tych dwóch?
     """ 
-    router_square = np.zeros((R_max, R_max))
+    local_router_square = np.zeros((R_max, R_max))
     
     #x, y współrzędne lewego górnego rogu 
     left_upper_x = router_point.x - R_max // 2
@@ -52,9 +52,10 @@ def local_router_range(building: dm.Building, router_point: dm.Point, R_max: int
     for i in range(R_max):
         for j in range(R_max):
             if (left_upper_x + i, left_upper_y + j) != (router_point.x, router_point.y):
-                router_square[i, j] = goal_function_point(building, dm.Point(left_upper_x + i, left_upper_y + j, 0), router_point, 2)
-    
-    return router_square, router_point
+                local_router_square[i, j] = 10**(goal_function_point(building, dm.Point(left_upper_x + i, left_upper_y + j, 0), router_point, 2)/10)
+            else:
+                local_router_square[i, j] = 3 #WARTOŚĆ SYGNAŁU W MIEJSCU RUTERA
+    return local_router_square, (left_upper_x, left_upper_y)
 
 
 def agregation_func(building: dm.Building, local_ranges: List[Tuple[np.ndarray, dm.Point]]) -> np.ndarray:
@@ -138,7 +139,6 @@ def local_change(current_solution: List[int]) -> List[List[int]]:
     """
     pass
 
-
 def aspiration_criteria(neighbor, best_value, best_solution) -> bool:
     #TODO
     """
@@ -148,7 +148,6 @@ def aspiration_criteria(neighbor, best_value, best_solution) -> bool:
     nie wiem w sumie XD -> np z tym lepszy od najlepszego znalezionego czy cos takiego
     """
     pass
-
 
 def constructive_change(building: dm.Building, current_solution: List[int], router_usefullnes: List[int]) -> List[int]:
     #TODO
@@ -191,8 +190,6 @@ def initial_solution(building: dm.Building, available_routers: list[dm.Router]) 
         router_num += 1
     
     return solution
-
-
 
 def tabu_search(building: dm.Building, available_routers: list[dm.Router], tabu_length: int = TABU_LIST_LENGTH) -> Tuple[List[dm.Point], float] :
     """

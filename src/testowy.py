@@ -74,9 +74,6 @@ agregation_matrix = np.array(
 )
 
 
-macierz = functions.local_router_range(budynek, data_matrices.Point(1,6, 0), 4)
-print(macierz)
-
 # Teraz mini testy do funkcji drugiej - agregującej nalezy stworzyć liste krotek - macierz i jej lewy górny róg - to co zwraca local_router_range
 local_ranges = [
     (np.array([[7, 7, 7, 7], [8, 8, 8, 7], [8, 9, 8, 7], [8, 8, 8, 7]]), (4, 0)),
@@ -84,5 +81,23 @@ local_ranges = [
     (np.array([[7, 7, 7, 7], [7, 8, 8, 8], [7, 8, 9, 8], [7, 8, 8, 8]]), (4, 4))
 ]
 
-# print(functions.goal_function(budynek.Floor_list[0], agregation_matrix))
-# print(functions.agregation_func(budynek, local_ranges))
+
+
+router_square1, router_point1 = functions.local_router_range(budynek, router_point=data_matrices.Point(1,6, 0), R_max=5)
+router_square2, router_point2 = functions.local_router_range(budynek, router_point=data_matrices.Point(6,1, 0), R_max=5)
+router_square3, router_point3 = functions.local_router_range(budynek, router_point=data_matrices.Point(6,6, 0), R_max=5)
+
+local_ragnes2 = [(router_square1, router_point1), (router_square2, router_point2), (router_square3, router_point3)]
+
+print(router_point1)
+print(router_point2)
+print(router_point3)
+
+print(router_square1)
+print(router_square2)
+print(router_square3)
+
+agregation_matrix = functions.agregation_func(budynek, local_ragnes2)
+print(agregation_matrix)
+
+print(functions.goal_function(budynek.Floor_list[0], agregation_matrix))

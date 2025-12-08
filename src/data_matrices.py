@@ -1,9 +1,8 @@
 # tutaj wstawiam kilka danych
-
+from __future__ import annotations # To rozwiązuje problem kolejności klas
 import numpy as np
 from typing import List
 from math import floor
-from functions import goal_function_point
 
 class Point:
     def __init__(self, x: int, y: int, Floor_number: int):
@@ -74,45 +73,6 @@ class Building:
         )  # od razu buduje liste punktów do obliczenia zasięgu dla łatwiejszego dostępu
         self.Floor_heights = Floor_heights
         self.router_locations = self.__initial_solution(available_routers)
-
-class Router:
-    def __init__(self, Power: float, Max_users: int):
-        self.power = Power
-        self.max_users = Max_users
-        self.position = None
-        self.coverage_grid = None
-        self.grid_corner = None
-    
-    def calculate_coverage(self, building: Building, router_point: Point, R_max: int):
-        """
-        Oblicza zasięg od pojedynczego ruter, w jego istotnym otoczeniu. Wartości oblicza się w dB
-        
-        Args:
-            building (dm.Building): budynek
-            router_point (dm.Point): punkt w którym znajduje się ruter
-            R_max (int): threshold dystansu
-        Returns:
-            building_box (np.ndarray) - mała macierz - lokalna mapa zasięgu
-            point (dm.Point) - współrzędne lewego górnego rogu lokalnej macierzy
-        
-        krotka z tych dwóch?
-        """ 
-        local_router_square = np.zeros((R_max, R_max))
-        
-        #x, y współrzędne lewego górnego rogu 
-        left_upper_x = router_point.x - R_max // 2
-        left_upper_y = router_point.y - R_max // 2
-        
-        for i in range(R_max):
-            for j in range(R_max):
-                if (left_upper_x + i, left_upper_y + j) != (router_point.x, router_point.y):
-                    local_router_square[i, j] = 10**(goal_function_point(building, Point(left_upper_x + i, left_upper_y + j, 0), router_point, 2)/10)
-                else:
-                    local_router_square[i, j] = 3 #WARTOŚĆ SYGNAŁU W MIEJSCU RUTERA
-        
-        self.coverage_grid = local_router_square
-        self.grid_corner = (left_upper_x, left_upper_y)
-
 
     def __get_possible_router_positions(self) -> List:
         """
@@ -435,3 +395,43 @@ class Router:
 
 def euclidean_distance(point1: np.ndarray, point2: np.ndarray) -> float:
     return np.sqrt(np.sum((point1 - point2) ** 2))
+
+
+class Router:
+    def __init__(self, Power: float, Max_users: int, Max_range: int):
+        self.power = Power
+        self.max_users = Max_users
+        self.position = None
+        self.coverage_grid = None
+        self.grid_corner = None
+        self.max_range = Max_range
+
+    def calculate_coverage(self, building: Building, router_point: Point):
+        """
+        Oblicza zasięg od pojedynczego ruter, w jego istotnym otoczeniu. Wartości oblicza się w dB
+        
+        Args:
+            building (dm.Building): budynek
+            router_point (dm.Point): punkt w którym znajduje się ruter
+            R_max (int): threshold dystansu
+        Returns:
+            building_box (np.ndarray) - mała macierz - lokalna mapa zasięgu
+            point (dm.Point) - współrzędne lewego górnego rogu lokalnej macierzy
+        
+        krotka z tych dwóch?
+        """ 
+        local_router_square = np.zeros((self.max_range, self.max_range))
+        
+        #x, y współrzędne lewego górnego rogu 
+        left_upper_x = self.position.x - self.max_range // 2
+        left_upper_y = self.position.y - self.max_range // 2
+        
+        for i in range(self.max_range):
+            for j in range(self.max_range):
+                if (left_upper_x + i, left_upper_y + j) != (self.position.x, self.position.y):
+                    local_router_square[i, j] = 10**(goal_function_point(building, Point(left_upper_x + i, left_upper_y + j, 0), self.position, 2)/10)
+                else:
+                    local_router_square[i, j] = 3 #WARTOŚĆ SYGNAŁU W MIEJSCU RUTERA
+        
+        self.coverage_grid = local_router_square
+        self.grid_corner = (left_upper_x, left_upper_y)

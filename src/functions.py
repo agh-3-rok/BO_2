@@ -29,58 +29,40 @@ def goal_function_point(building: dm.Building, point: dm.Point, router: dm.Point
     
     return signal_db
     
-def local_router_range(building: dm.Building, router_point: dm.Point, R_max: int) -> Tuple[np.ndarray, dm.Point]:
-    """
-    Oblicza zasięg od pojedynczego ruter, w jego istotnym otoczeniu. Wartości oblicza się w dB
-    
-    Args:
-        building (dm.Building): budynek
-        router_point (dm.Point): punkt w którym znajduje się ruter
-        R_max (int): threshold dystansu
-    Returns:
-        building_box (np.ndarray) - mała macierz - lokalna mapa zasięgu
-        point (dm.Point) - współrzędne lewego górnego rogu lokalnej macierzy
-    
-    krotka z tych dwóch?
-    """ 
-    local_router_square = np.zeros((R_max, R_max))
-    
-    #x, y współrzędne lewego górnego rogu 
-    left_upper_x = router_point.x - R_max // 2
-    left_upper_y = router_point.y - R_max // 2
-    
-    for i in range(R_max):
-        for j in range(R_max):
-            if (left_upper_x + i, left_upper_y + j) != (router_point.x, router_point.y):
-                local_router_square[i, j] = 10**(goal_function_point(building, dm.Point(left_upper_x + i, left_upper_y + j, 0), router_point, 2)/10)
-            else:
-                local_router_square[i, j] = 3 #WARTOŚĆ SYGNAŁU W MIEJSCU RUTERA
-    return local_router_square, (left_upper_x, left_upper_y)
+
 
 def trnsform_current_location_into_local_ranges():
     raise NotImplementedError
 
 
-def agregation_func(building: dm.Building, local_ranges: List[Tuple[np.ndarray, dm.Point]]) -> np.ndarray:
+def agregation_func(building: dm.Building, routers: List[dm.Router]) -> np.ndarray:
     """
-    FUNKCAJ UŻYWANA PRZY INICJALIZACJI - LICZY DLA WSZYSTKICH RUTERÓW 
-    Funkcja realizuje wzór na agregację/max sygnału, wykorzystując lokalne zasięgi od ruterów oblicza całą siatkę zasięgów.
+    Funkcja realizuje wzór na agregację/max sygnału, wykorzystując obiekty Router z ich kratkami zasięgu.
+    Oblicza całą siatkę zasięgów jako maximum ze wszystkich routerów.
 
     Args:
         building (dm.Building): budynek
-        local_ranges (list): lista, krotek lokalnych zasięgów i punktów w których zaczyna się siatka
+        routers (List[dm.Router]): lista routerów z obliczonymi kratkami zasięgu (coverage_grid)
         
     Returns:
-        ranges (np.ndarray): siatka zasięgów
+        ranges (np.ndarray): globalna siatka zasięgów (maximum ze wszystkich routerów)
     """
     
     # NARAZIE POMIJAM ILOSC PIĘTER WYSTACZY DODAC FOR PO PIĘTRACH POTEM
-    pietro =  building.Floor_list[0]
+    pietro = building.Floor_list[0]
     H, W = pietro.wall.shape
     
     global_map = np.zeros((H, W), dtype=float)
     
-    for local_grid, (start_row, start_col) in local_ranges:
+    # Dla każdego routera agreguj jego kratkę zasięgu do mapy globalnej
+    for router in routers:
+        # Pomiń routery bez obliczonej kratki
+        if router.coverage_grid is None or router.grid_corner is None:
+            continue
+        
+        local_grid = router.coverage_grid
+        start_row, start_col = router.grid_corner
+        
         # Wymiary małego wycinka
         h_local, w_local = local_grid.shape
 
@@ -108,7 +90,6 @@ def agregation_func(building: dm.Building, local_ranges: List[Tuple[np.ndarray, 
         global_map[global_r_start:global_r_end, global_c_start:global_c_end] = np.maximum(current_slice, new_slice)
 
     return global_map
-    
 
 
 
@@ -136,40 +117,35 @@ def goal_function(building: dm.Building, ranges_matrix: np.ndarray) -> float:
 """
 
 
-def _local_change(solution: List[int]) -> List[List[int]]:
+def local_change(solution: List[int]) -> List[List[int]]:
     """
-    Generuje sąsiedztwo poprzez lokalne zmiany.
+    Przesuwa jeden losowy router na losową wolną pozycję.
     
-    Typy ruchów:
-    - Przesunięcie routera do sąsiedniej pozycji
-    - Zamiana pozycji dwóch routerów
+    Returns:
+        Nowe rozwiązanie z jednym routerem w nowej pozycji.
     """
-    neighborhood = []
     num_possible = len(solution)
-    
-    # znajdź pozycje z routerami
     router_positions = [i for i, val in enumerate(solution) if val > 0]
     
-    # przesuń każdy router do wolnej pozycji
-    for pos in router_positions:
-        router_id = solution[pos]
-        
-        #sprawdź wszystkie wolne pozycje
-        for neighbor_pos in range(num_possible):
-            if solution[neighbor_pos] == 0:  # wolna pozycja
-                new_solution = solution.copy()
-                new_solution[pos] = 0
-                new_solution[neighbor_pos] = router_id
-                neighborhood.append(new_solution)
+    if not router_positions:
+        return solution.copy()
     
-    # zamień pozycje dwóch routerów
-    for i, pos1 in enumerate(router_positions):
-        for pos2 in router_positions[i+1:]:
-            new_solution = solution.copy()
-            new_solution[pos1], new_solution[pos2] = new_solution[pos2], new_solution[pos1]
-            neighborhood.append(new_solution)
+    # Losowy router do przesunięcia
+    pos = np.random.choice(router_positions)
+    router_id = solution[pos]
     
-    return neighborhood
+    # Losowa wolna pozycja
+    free_positions = [i for i in range(num_possible) if solution[i] == 0]
+    if not free_positions:
+        return solution.copy()
+    
+    neighbor_pos = np.random.choice(free_positions)
+    
+    new_solution = solution.copy()
+    new_solution[pos] = 0
+    new_solution[neighbor_pos] = router_id
+    
+    return new_solution
 
 def aspiration_criteria(neighbor, best_value, best_solution) -> bool:
     #TODO

@@ -318,6 +318,7 @@ class Building:
         floor_points, total_floor_thickness = self.calculate_line_floors(p1, p2)
 
         #musi skakać co 2 bo, punkty po sobie śa na jednym piętrze -> bresenham między nimi
+        #TODO : obsługa przypadku gdy punkty są pionowo nad sobą
         for i in range(0, len(floor_points) - 1, 2):
             fp1 = floor_points[i]
             fp2 = floor_points[i + 1]
@@ -341,3 +342,12 @@ class Building:
 
         return total_damping
     
+
+class Router:
+    #TODO
+
+    def __init__(self, Power: float, Max_users: int):
+        self.power = Power
+        self.max_users = Max_users
+
+    pass

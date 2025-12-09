@@ -86,22 +86,29 @@ ruter3.calculate_coverage(building=budynek)
 
 tabu = data_matrices.TabuSearch(building=budynek, available_routers=[ruter1, ruter2, ruter3])
 
+print("===========INITIAL SOLUTION===========")
 tabu.initial_solution()
 print(tabu.current_solution)
 print(tabu.evaluate_solution())
 
-tabu.current_solution = functions.local_change(tabu.current_solution)
+tabu.local_change()
 print(tabu.current_solution)
 print(tabu.evaluate_solution())
 
-tabu.current_solution = functions.local_change(tabu.current_solution)
+tabu.local_change()
 print(tabu.current_solution)
 print(tabu.evaluate_solution())
 
-tabu.current_solution = functions.local_change(tabu.current_solution)
+tabu.local_change()
 print(tabu.current_solution)
 print(tabu.evaluate_solution())
 
-tabu.current_solution = functions.local_change(tabu.current_solution)
+tabu.local_change()
+print(tabu.current_solution)
+print(tabu.evaluate_solution())
+
+
+print("===========INITIAL SOLUTION===========")
+tabu.initial_solution()
 print(tabu.current_solution)
 print(tabu.evaluate_solution())

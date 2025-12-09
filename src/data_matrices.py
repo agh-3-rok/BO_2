@@ -602,3 +602,43 @@ class TabuSearch:
         
         return neighbor_value > self.best_value
     
+    def local_change(self):
+        """
+        Przesuwa jeden losowy router na losową wolną pozycję.
+        Aktualizuje router.position, przelicza coverage i przypisuje do self.current_solution.
+        
+        Returns:
+            Nowe rozwiązanie z jednym routerem w nowej pozycji.
+        """
+        num_possible = len(self.current_solution)
+        # Znajdź pozycje z routerami (wartość >= 0)
+        router_positions = [i for i, val in enumerate(self.current_solution) if val >= 0]
+        
+        if not router_positions:
+            return self.current_solution.copy()
+        
+        # Losowy router do przesunięcia
+        pos = np.random.choice(router_positions)
+        router_id = self.current_solution[pos]
+        
+        # Znajdź wolne pozycje (wartość == -1)
+        free_positions = [i for i in range(num_possible) if self.current_solution[i] == -1]
+        if not free_positions:
+            return self.current_solution.copy()
+        
+        neighbor_pos = np.random.choice(free_positions)
+        
+        new_solution = self.current_solution.copy()
+        new_solution[pos] = -1  # Stara pozycja staje się wolna
+        new_solution[neighbor_pos] = router_id  # Nowa pozycja dostaje routera
+        
+        # Zaktualizuj pozycję routera
+        self.available_routers[router_id].position = self.building.router_possible[neighbor_pos]
+        
+        # Przelicz kratkę zasięgu dla zmienionego routera
+        self.available_routers[router_id].calculate_coverage(self.building)
+        
+        # Przypisz nowe rozwiązanie do current_solution
+        self.current_solution = new_solution
+        
+    

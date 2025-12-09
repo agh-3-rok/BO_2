@@ -24,40 +24,6 @@ def goal_function(building: dm.Building, ranges_matrix: np.ndarray) -> float:
     return np.sum(building.cover * ranges_matrix)
 
 
-def local_change(solution: List[int]) -> List[int]:
-    """
-    Przesuwa jeden losowy router na losową wolną pozycję.
-    
-    Args:
-        solution: lista z indeksami routerów (-1 = wolne, >=0 = ID routera)
-    
-    Returns:
-        Nowe rozwiązanie z jednym routerem w nowej pozycji.
-    """
-    num_possible = len(solution)
-    # Znajdź pozycje z routerami (wartość >= 0)
-    router_positions = [i for i, val in enumerate(solution) if val >= 0]
-    
-    if not router_positions:
-        return solution.copy()
-    
-    # Losowy router do przesunięcia
-    pos = np.random.choice(router_positions)
-    router_id = solution[pos]
-    
-    # Znajdź wolne pozycje (wartość == -1)
-    free_positions = [i for i in range(num_possible) if solution[i] == -1]
-    if not free_positions:
-        return solution.copy()
-    
-    neighbor_pos = np.random.choice(free_positions)
-    
-    new_solution = solution.copy()
-    new_solution[pos] = -1  # Stara pozycja staje się wolna
-    new_solution[neighbor_pos] = router_id  # Nowa pozycja dostaje routera
-    
-    return new_solution
-
 def constructive_change(building: dm.Building, current_solution: List[int], router_usefullnes: List[int]) -> List[int]:
     #TODO
     """

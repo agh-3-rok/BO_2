@@ -80,5 +80,28 @@ ruter3 = data_matrices.Router(Power=10, Max_users=5, Max_range=5)
 ruter3.position = data_matrices.Point(6, 6, 0)
 ruter3.calculate_coverage(building=budynek)
 
-print(ruter1.coverage_grid)
-print(budynek.agregation_func([ruter1, ruter2, ruter3]))
+# print(ruter1.coverage_grid)
+# print(budynek.agregation_func([ruter1, ruter2, ruter3]))
+
+
+tabu = data_matrices.TabuSearch(building=budynek, available_routers=[ruter1, ruter2, ruter3])
+
+tabu.initial_solution()
+print(tabu.current_solution)
+print(tabu.evaluate_solution())
+
+tabu.current_solution = functions.local_change(tabu.current_solution)
+print(tabu.current_solution)
+print(tabu.evaluate_solution())
+
+tabu.current_solution = functions.local_change(tabu.current_solution)
+print(tabu.current_solution)
+print(tabu.evaluate_solution())
+
+tabu.current_solution = functions.local_change(tabu.current_solution)
+print(tabu.current_solution)
+print(tabu.evaluate_solution())
+
+tabu.current_solution = functions.local_change(tabu.current_solution)
+print(tabu.current_solution)
+print(tabu.evaluate_solution())

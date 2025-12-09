@@ -24,15 +24,19 @@ def goal_function(building: dm.Building, ranges_matrix: np.ndarray) -> float:
     return np.sum(building.cover * ranges_matrix)
 
 
-def local_change(solution: List[int]) -> List[List[int]]:
+def local_change(solution: List[int]) -> List[int]:
     """
     Przesuwa jeden losowy router na losową wolną pozycję.
+    
+    Args:
+        solution: lista z indeksami routerów (-1 = wolne, >=0 = ID routera)
     
     Returns:
         Nowe rozwiązanie z jednym routerem w nowej pozycji.
     """
     num_possible = len(solution)
-    router_positions = [i for i, val in enumerate(solution) if val > 0]
+    # Znajdź pozycje z routerami (wartość >= 0)
+    router_positions = [i for i, val in enumerate(solution) if val >= 0]
     
     if not router_positions:
         return solution.copy()
@@ -41,83 +45,18 @@ def local_change(solution: List[int]) -> List[List[int]]:
     pos = np.random.choice(router_positions)
     router_id = solution[pos]
     
-    # Losowa wolna pozycja
-    free_positions = [i for i in range(num_possible) if solution[i] == 0]
+    # Znajdź wolne pozycje (wartość == -1)
+    free_positions = [i for i in range(num_possible) if solution[i] == -1]
     if not free_positions:
         return solution.copy()
     
     neighbor_pos = np.random.choice(free_positions)
     
     new_solution = solution.copy()
-    new_solution[pos] = 0
-    new_solution[neighbor_pos] = router_id
+    new_solution[pos] = -1  # Stara pozycja staje się wolna
+    new_solution[neighbor_pos] = router_id  # Nowa pozycja dostaje routera
     
     return new_solution
-
-def evaluate_solution(building: dm.Building, solution: List[int], R_max: int = 20) -> float:
-    """
-    Oblicza wartość funkcji celu dla danego rozwiązania.
-    
-    Kroki:
-    1. Dla każdego routera w solution obliczyć local_router_range
-    2. Użyć agregation_func do stworzenia globalnej mapy zasięgu
-    3. Użyć goal_function do obliczenia wartości
-    
-    Args:
-        building: budynek
-        solution: lista pozycji routerów (0 = brak routera, >0 = ID routera)
-        R_max: maksymalny zasięg do obliczenia
-        
-    Returns:
-        wartość funkcji celu
-    """
-    # Znajdź pozycje routerów
-    router_positions = [(i, val) for i, val in enumerate(solution) if val > 0]
-    
-    if not router_positions:
-        return float('-inf')  # brak routerów = najgorsza wartość
-    
-    # Utwórz obiekty Router dla każdej pozycji
-    routers_list = []
-    
-    for pos_idx, router_id in router_positions:
-        # Konwertuj indeks pozycji na Point
-        router_point = building.router_possible[pos_idx]
-        
-        # Utwórz router (pobierz parametry z available_routers jeśli potrzeba)
-        router = dm.Router(Power=10, Max_users=5, Max_range=R_max)
-        router.position = router_point
-        
-        # Oblicz zasięg dla tego routera
-        router.calculate_coverage(building=building, router_point=router_point, R_max=R_max)
-        
-        routers_list.append(router)
-    
-    # Agreguj zasięgi
-    ranges_matrix = building.agregation_func(routers_list)
-    
-    # Oblicz wartość funkcji celu
-    value = goal_function(building, ranges_matrix)
-    
-    return value
-
-
-def aspiration_criteria(building: dm.Building, neighbor: List[int], best_value: float, R_max: int = 20) -> bool:
-    """
-    Kryterium aspiracji - pozwala na ruch tabu jeśli jest lepszy od najlepszego.
-    
-    Args:
-        building: budynek
-        neighbor: rozwiązanie sąsiednie do oceny
-        best_value: dotychczasowa najlepsza wartość funkcji celu
-        R_max: maksymalny zasięg
-        
-    Returns:
-        True jeśli neighbor jest lepszy od best_value (pozwól na ruch mimo tabu)
-    """
-    neighbor_value = evaluate_solution(building, neighbor, R_max)
-    return neighbor_value > best_value
-
 
 def constructive_change(building: dm.Building, current_solution: List[int], router_usefullnes: List[int]) -> List[int]:
     #TODO

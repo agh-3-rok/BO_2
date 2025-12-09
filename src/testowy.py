@@ -2,6 +2,8 @@ import numpy as np
 import data_matrices
 import functions
 
+
+
 wall_matrix = np.array(
     [
         [5, 5, 5, 5, 5, 5, 5, 5],
@@ -68,15 +70,15 @@ budynek = data_matrices.Building(
 # Tworzenie routerów w poszczególnych pozycjach
 ruter1 = data_matrices.Router(Power=10, Max_users=5, Max_range=5)
 ruter1.position = data_matrices.Point(1, 1, 0)
-ruter1.calculate_coverage(building=budynek, router_point=data_matrices.Point(1, 1, 0))
+ruter1.calculate_coverage(building=budynek)
 
 ruter2 = data_matrices.Router(Power=10, Max_users=5, Max_range=5)
 ruter2.position = data_matrices.Point(6, 1, 0)
-ruter2.calculate_coverage(building=budynek, router_point=data_matrices.Point(6, 1, 0))
+ruter2.calculate_coverage(building=budynek)
 
 ruter3 = data_matrices.Router(Power=10, Max_users=5, Max_range=5)
 ruter3.position = data_matrices.Point(6, 6, 0)
-ruter3.calculate_coverage(building=budynek, router_point=data_matrices.Point(6, 6, 0))
+ruter3.calculate_coverage(building=budynek)
 
 print(ruter1.coverage_grid)
 print(budynek.agregation_func([ruter1, ruter2, ruter3]))

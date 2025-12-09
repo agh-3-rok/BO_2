@@ -2,6 +2,9 @@ import data_matrices as dm
 import numpy as np
 from typing import Tuple, List
 
+FLOOR_DAMPING_PARAM = 2.0  #przykładowa wartość tłumienia podłogi między piętrami
+TABU_LIST_LENGTH = 10  # przykładowa długość tabu listy
+MAX_ITERATIONS = 100  # przykładowa maksymalna liczba iteracji tabu search
 
 def euclidean_distance(point1: np.ndarray, point2: np.ndarray) -> float:
     return np.sqrt(np.sum((point1 - point2) ** 2))
@@ -51,15 +54,70 @@ def local_change(solution: List[int]) -> List[List[int]]:
     
     return new_solution
 
-def aspiration_criteria(neighbor, best_value, best_solution) -> bool:
-    #TODO
+def evaluate_solution(building: dm.Building, solution: List[int], R_max: int = 20) -> float:
     """
-    Funkcja realizująca kryterium aspiracji w algorytmie tabu search
-
+    Oblicza wartość funkcji celu dla danego rozwiązania.
+    
+    Kroki:
+    1. Dla każdego routera w solution obliczyć local_router_range
+    2. Użyć agregation_func do stworzenia globalnej mapy zasięgu
+    3. Użyć goal_function do obliczenia wartości
+    
+    Args:
+        building: budynek
+        solution: lista pozycji routerów (0 = brak routera, >0 = ID routera)
+        R_max: maksymalny zasięg do obliczenia
+        
     Returns:
-    nie wiem w sumie XD -> np z tym lepszy od najlepszego znalezionego czy cos takiego
+        wartość funkcji celu
     """
-    pass
+    # Znajdź pozycje routerów
+    router_positions = [(i, val) for i, val in enumerate(solution) if val > 0]
+    
+    if not router_positions:
+        return float('-inf')  # brak routerów = najgorsza wartość
+    
+    # Utwórz obiekty Router dla każdej pozycji
+    routers_list = []
+    
+    for pos_idx, router_id in router_positions:
+        # Konwertuj indeks pozycji na Point
+        router_point = building.router_possible[pos_idx]
+        
+        # Utwórz router (pobierz parametry z available_routers jeśli potrzeba)
+        router = dm.Router(Power=10, Max_users=5, Max_range=R_max)
+        router.position = router_point
+        
+        # Oblicz zasięg dla tego routera
+        router.calculate_coverage(building=building, router_point=router_point, R_max=R_max)
+        
+        routers_list.append(router)
+    
+    # Agreguj zasięgi
+    ranges_matrix = building.agregation_func(routers_list)
+    
+    # Oblicz wartość funkcji celu
+    value = goal_function(building, ranges_matrix)
+    
+    return value
+
+
+def aspiration_criteria(building: dm.Building, neighbor: List[int], best_value: float, R_max: int = 20) -> bool:
+    """
+    Kryterium aspiracji - pozwala na ruch tabu jeśli jest lepszy od najlepszego.
+    
+    Args:
+        building: budynek
+        neighbor: rozwiązanie sąsiednie do oceny
+        best_value: dotychczasowa najlepsza wartość funkcji celu
+        R_max: maksymalny zasięg
+        
+    Returns:
+        True jeśli neighbor jest lepszy od best_value (pozwól na ruch mimo tabu)
+    """
+    neighbor_value = evaluate_solution(building, neighbor, R_max)
+    return neighbor_value > best_value
+
 
 def constructive_change(building: dm.Building, current_solution: List[int], router_usefullnes: List[int]) -> List[int]:
     #TODO

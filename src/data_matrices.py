@@ -475,9 +475,6 @@ class Building:
         return global_map
 
 
-
-
-
 class Router:
     def __init__(self, Power: float, Max_users: int, Max_range: int):
         self.power = Power
@@ -487,7 +484,7 @@ class Router:
         self.grid_corner = None
         self.max_range = Max_range
 
-    def calculate_coverage(self, building: Building, router_point: Point):
+    def calculate_coverage(self, building: Building):
         """
         Oblicza zasięg od pojedynczego ruter, w jego istotnym otoczeniu. Wartości oblicza się w dB
         
@@ -516,3 +513,4 @@ class Router:
         
         self.coverage_grid = local_router_square
         self.grid_corner = (left_upper_x, left_upper_y)
+        

@@ -1,7 +1,7 @@
 # tutaj wstawiam kilka danych
 from __future__ import annotations # To rozwiązuje problem kolejności klas
 import numpy as np
-from typing import List
+from typing import List, Tuple
 from math import floor
 
 FLOOR_DAMPING_PARAM = 2.0  #przykładowa wartość tłumienia podłogi między piętrami
@@ -640,5 +640,73 @@ class TabuSearch:
         
         # Przypisz nowe rozwiązanie do current_solution
         self.current_solution = new_solution
+        return new_solution
+    
+    def run(self) -> Tuple[List[int], float, dict]:
+        """
+        Uruchamia algorytm Tabu Search.
+        
+        Returns:
+            (best_solution, best_value, history)
+        """
+        print("=== Start Tabu Search ===")
+        self.initial_solution()
+        
+        for iteration in range(self.max_iterations):
+            # Generuj sąsiada
+            neighbor = self.local_change()
+            
+            # Oceń sąsiada
+            neighbor_value = self.evaluate_solution()
+            
+            # Sprawdź czy jest w tabu
+            is_tabu = neighbor in self.tabu_list
+            
+            # Oceń czy zaakceptować (nie w tabu ALBO spełnia aspirację)
+            accept = False
+            if not is_tabu:
+                accept = True
+            elif self.aspiration_criteria(neighbor):
+                accept = True
+            
+            if accept:
+                # Dodaj do tabu listy
+                self.tabu_list.append(neighbor.copy())
+                if len(self.tabu_list) > self.tabu_length:
+                    self.tabu_list.pop(0)
+                
+                # Aktualizuj najlepsze rozwiązanie
+                if neighbor_value > self.best_value:
+                    self.best_solution = neighbor.copy()
+                    self.best_value = neighbor_value
+            else:
+                # Cofnij zmianę (przywróć poprzednie rozwiązanie)
+                # Trzeba znaleźć router który się zmienił i cofnąć
+                for i in range(len(self.current_solution)):
+                    if self.current_solution[i] != neighbor[i]:
+                        # Znaleziony zmieniony router
+                        router_id = self.current_solution[i]
+                        if router_id >= 0:
+                            # Przywróć starą pozycję
+                            for j in range(len(self.current_solution)):
+                                if neighbor[j] == router_id and i != j:
+                                    self.available_routers[router_id].position = self.building.router_possible[i]
+                                    self.available_routers[router_id].calculate_coverage(self.building)
+                                    break
+                        break
+                self.current_solution = self.best_solution.copy()
+            
+            # Zapisz historię
+            self.history['iterations'].append(iteration + 1)
+            self.history['best_values'].append(self.best_value)
+            self.history['current_values'].append(neighbor_value)
+            
+            if (iteration + 1) % 10 == 0:
+                print(f"Iteracja {iteration + 1}/{self.max_iterations}, Best: {self.best_value:.2f}")
+        
+        print(f"\n=== Koniec ===")
+        print(f"Najlepsza wartość: {self.best_value:.2f}")
+        
+        return self.best_solution, self.best_value, self.history
         
     

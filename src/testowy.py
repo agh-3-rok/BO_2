@@ -112,3 +112,7 @@ print("===========INITIAL SOLUTION===========")
 tabu.initial_solution()
 print(tabu.current_solution)
 print(tabu.evaluate_solution())
+
+
+best, d, ss = tabu.run()
+print(best)

@@ -1,22 +1,35 @@
 Do zrobienia:
 
-z zeszłego tygodnia
-- (P)przetestować fizykę -> czy na pewno dobrze wyliczane są kolejne punkty przechodzenia przez podłogę!
-- (W) zintegorować liczenie funkcji celu
-
-Cel na ten tydzień: działający algorytm taboo search (pierwszy protoptyp)
+Cel na ten tydzień: podstawy GUI + ulepszenie algorytmu
 
 założenia :
 - (każdy kurna) pisać modułowo z myślą o rozbudowie (żeby się wygodnie dało zmienić funkcję na inną itp)
 - (każdy kurna) testować czy działa to co napisałeś
 
 co zrobić:
-- (P) zdefiniować klasę router do obłusgi różnych rodzajów routerów (pod względem zasiegu, maksymlanego udźwigu)
-- (P) napisać schemat pętli taboo search (zdefiniowany w funkcji)
-- (W) zaimplementować lokalne zmiany rozwiązania (przynajmniej jeden wariany)
-- (W) zaimplementować kryterium aspiracji (pryznajmniej jeden wariant)
-- (P) przetestować fizykę -> czy na pewno dobrze wyliczane są kolejne punkty przechodzenia przez podłogę!
-- (P/W) zaimplementować rozwiązanie "konstrukcyjne" (przynajmniej jedna wersja) -> potancjalnie może być głupie XD 
+
+BACKEND
+- zaimplementować lokalne zmiany rozwiązania (inny wariant, powinno być łatwo coś innego) 
+- ogarnąć kryterium aspiracji (czemu się nie uaktywnia, itd)
+- zaimplementować rozwiązanie "konstrukcyjne" (przynajmniej jedna wersja) -> potancjalnie może być głupie (jednak fajnie by wykorzystać jakieś na podstawie użytecznośći danego routera w danym rozw.) 
+
+FRONTEND
+- gui ogarnąć jakie
+- wpisywanie danych
+- rysowanie wykresu funkcji celu, najlepiej real time
+- pobieraie danych z porgramu
+- pierwszy prototyp wpisywanie macierzy zaznaczanie kolorkami na piętrach jakoś
 
 
-później:
+Do sprawdzenia: 
+
+- fizyczność rozw. 
+
+-- zrobić testy fizycznośći rozw. -> jakieś przykłady 2 skupiska miejsc gdzie chcemy mieć zasięg, między nimi kilka ścian (a co jak będize podłoga, albo kilka pięter), gdzie algorytm da router, 
+-- badanie wpływu parametrów fizycznych na algorytm
+-- przetestować fizykę -> czy na pewno dobrze wyliczane są kolejne punkty przechodzenia przez podłogę!
+
+
+- jakieś parametry algosa
+-- ilość iteracji
+-- itd

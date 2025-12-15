@@ -3,6 +3,7 @@ import data_matrices
 import functions
 
 
+
 wall_matrix = np.array(
     [
         [5, 5, 5, 5, 5, 5, 5, 5],
@@ -20,12 +21,12 @@ wall_matrix = np.array(
 router_matrix = np.array(
     [
         [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 1, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 1, 0, 0, 0, 0, 1, 0],
+        [0, 1, 1, 0, 0, 0, 1, 0],
+        [0, 0, 0, 0, 0, 1, 0, 0],
+        [0, 1, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 1, 0, 0, 0, 0],
+        [0, 0, 1, 0, 1, 0, 1, 0],
+        [0, 1, 0, 1, 1, 0, 1, 0],
         [0, 0, 0, 0, 0, 0, 0, 0],
     ]
 )
@@ -53,32 +54,49 @@ pietro = data_matrices.Floor(
     Floor_thickness=0.3,
 )
 
+# Dostępne routery do wykorzystania
+available_routers = [
+    data_matrices.Router(Power=10, Max_users=5, Max_range=5),
+    data_matrices.Router(Power=10, Max_users=5, Max_range=5),
+    data_matrices.Router(Power=10, Max_users=5, Max_range=5),
+]
+
 budynek = data_matrices.Building(
     Floors=[pietro],
     Floor_heights=2.5,
+    available_routers=available_routers
 )
 
-# print(budynek.router_possible)
-# print(budynek.points_to_calculate)
-agregation_matrix = np.array(
-    [
-        [3, 4, 5, 6, 7, 8, 8, 8],
-        [4, 4, 5, 6, 7, 8, 9, 8],
-        [5, 5, 5, 6, 7, 8, 8, 8],
-        [6, 6, 6, 6, 7, 7, 7, 7],
-        [7, 7, 7, 7, 7, 7, 7, 7],
-        [8, 8, 8, 7, 7, 8, 8, 8],
-        [8, 9, 8, 7, 7, 8, 9, 8],
-        [8, 8, 8, 7, 7, 8, 8, 8],
-    ]
-)
+# Tworzenie routerów w poszczególnych pozycjach
+ruter1 = data_matrices.Router(Power=10, Max_users=5, Max_range=5)
+ruter1.position = data_matrices.Point(1, 1, 0)
+ruter1.calculate_coverage(building=budynek)
 
-# Teraz mini testy do funkcji drugiej - agregującej nalezy stworzyć liste krotek - macierz i jej lewy górny róg - to co zwraca local_router_range
-local_ranges = [
-    (np.array([[7, 7, 7, 7], [8, 8, 8, 7], [8, 9, 8, 7], [8, 8, 8, 7]]), (4, 0)),
-    (np.array([[7, 8, 8, 8], [7, 8, 9, 8], [7, 8, 8, 8], [7, 7, 7, 7]]), (0, 4)),
-    (np.array([[7, 7, 7, 7], [7, 8, 8, 8], [7, 8, 9, 8], [7, 8, 8, 8]]), (4, 4))
-]
+ruter2 = data_matrices.Router(Power=10, Max_users=5, Max_range=5)
+ruter2.position = data_matrices.Point(6, 1, 0)
+ruter2.calculate_coverage(building=budynek)
 
-# print(functions.goal_function(budynek.Floor_list[0], agregation_matrix))
-print(functions.agregation_func(budynek, local_ranges))
+ruter3 = data_matrices.Router(Power=10, Max_users=5, Max_range=5)
+ruter3.position = data_matrices.Point(6, 6, 0)
+ruter3.calculate_coverage(building=budynek)
+
+# print(ruter1.coverage_grid)
+# print(budynek.agregation_func([ruter1, ruter2, ruter3]))
+
+bbest = 0
+
+for i in range(100):
+    tabu = data_matrices.TabuSearch(building=budynek, available_routers=[ruter1, ruter2, ruter3], max_iterations=100, tabu_length=10)
+
+    # print("===========INITIAL SOLUTION===========")
+    tabu.initial_solution()
+    # print(tabu.current_solution)
+    # print(tabu.evaluate_solution())
+    best, d, ss = tabu.run()
+    if d > bbest:
+        bbest = d
+
+print(bbest)
+    
+    
+    

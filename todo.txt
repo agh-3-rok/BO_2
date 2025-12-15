@@ -2,7 +2,7 @@ Do zrobienia:
 
 z zeszłego tygodnia
 - (P)przetestować fizykę -> czy na pewno dobrze wyliczane są kolejne punkty przechodzenia przez podłogę!
-- DONE (W) zintegorować liczenie funkcji celu
+- (W) zintegorować liczenie funkcji celu
 
 Cel na ten tydzień: działający algorytm taboo search (pierwszy protoptyp)
 
@@ -13,8 +13,9 @@ założenia :
 co zrobić:
 - (P) zdefiniować klasę router do obłusgi różnych rodzajów routerów (pod względem zasiegu, maksymlanego udźwigu)
 - (P) napisać schemat pętli taboo search (zdefiniowany w funkcji)
-- DONE (W) zaimplementować lokalne zmiany rozwiązania (przynajmniej jeden wariany) 
+- (W) zaimplementować lokalne zmiany rozwiązania (przynajmniej jeden wariany)
 - (W) zaimplementować kryterium aspiracji (pryznajmniej jeden wariant)
+- (P) przetestować fizykę -> czy na pewno dobrze wyliczane są kolejne punkty przechodzenia przez podłogę!
 - (P/W) zaimplementować rozwiązanie "konstrukcyjne" (przynajmniej jedna wersja) -> potancjalnie może być głupie XD 
 
 

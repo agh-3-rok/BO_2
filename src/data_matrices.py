@@ -571,7 +571,6 @@ class TabuSearch:
         
         return goal_value
     
-
     def aspiration_criteria(self, neighbor_solution: List[int]) -> bool:
         """
         Kryterium aspiracji - pozwala na ruch tabu jeśli jest lepszy od najlepszego.
@@ -649,7 +648,7 @@ class TabuSearch:
         Returns:
             (best_solution, best_value, history)
         """
-        print("=== Start Tabu Search ===")
+        # print("=== Start Tabu Search ===")
         self.initial_solution()
         
         for iteration in range(self.max_iterations):
@@ -701,11 +700,11 @@ class TabuSearch:
             self.history['best_values'].append(self.best_value)
             self.history['current_values'].append(neighbor_value)
             
-            if (iteration + 1) % 10 == 0:
-                print(f"Iteracja {iteration + 1}/{self.max_iterations}, Best: {self.best_value:.2f}")
+        #     if (iteration + 1) % 10 == 0:
+        #         print(f"Iteracja {iteration + 1}/{self.max_iterations}, Best: {self.best_value:.2f}")
         
-        print(f"\n=== Koniec ===")
-        print(f"Najlepsza wartość: {self.best_value:.2f}")
+        # print(f"\n=== Koniec ===")
+        # print(f"Najlepsza wartość: {self.best_value:.2f}")
         
         return self.best_solution, self.best_value, self.history
         

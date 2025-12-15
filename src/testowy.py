@@ -83,36 +83,20 @@ ruter3.calculate_coverage(building=budynek)
 # print(ruter1.coverage_grid)
 # print(budynek.agregation_func([ruter1, ruter2, ruter3]))
 
+bbest = 0
 
-tabu = data_matrices.TabuSearch(building=budynek, available_routers=[ruter1, ruter2, ruter3])
+for i in range(100):
+    tabu = data_matrices.TabuSearch(building=budynek, available_routers=[ruter1, ruter2, ruter3], max_iterations=100, tabu_length=10)
 
-print("===========INITIAL SOLUTION===========")
-tabu.initial_solution()
-print(tabu.current_solution)
-print(tabu.evaluate_solution())
+    # print("===========INITIAL SOLUTION===========")
+    tabu.initial_solution()
+    # print(tabu.current_solution)
+    # print(tabu.evaluate_solution())
+    best, d, ss = tabu.run()
+    if d > bbest:
+        bbest = d
 
-tabu.local_change()
-print(tabu.current_solution)
-print(tabu.evaluate_solution())
-
-tabu.local_change()
-print(tabu.current_solution)
-print(tabu.evaluate_solution())
-
-tabu.local_change()
-print(tabu.current_solution)
-print(tabu.evaluate_solution())
-
-tabu.local_change()
-print(tabu.current_solution)
-print(tabu.evaluate_solution())
-
-
-print("===========INITIAL SOLUTION===========")
-tabu.initial_solution()
-print(tabu.current_solution)
-print(tabu.evaluate_solution())
-
-
-best, d, ss = tabu.run()
-print(best)
+print(bbest)
+    
+    
+    

@@ -444,6 +444,67 @@ class Building:
 
         return global_map
 
+    def calculate_router_usefulness(self) -> List[float]:
+        """
+        Oblicza "przydatność" każdego routera z listy self.available_routers.
+        Przydatność = Suma (Siła Sygnału * Waga Pokrycia) w zasięgu routera.
+        
+        Returns:
+            List[float]: Lista wyników punktowych dla każdego routera (indeksy zgodne z listą routerów).
+        """
+        scores = []
+        
+        for router in self.available_routers:
+            # 1. Jeśli router nie jest ustawiony, jego użyteczność to 0
+            if router.position is None or router.coverage_grid is None:
+                scores.append(0.0)
+                continue
+                
+            # 2. Pobieramy piętro, na którym jest router
+            floor_idx = router.position.Floor_number
+            # Zabezpieczenie, gdyby router miał złe piętro
+            if floor_idx >= len(self.Floor_list):
+                scores.append(0.0)
+                continue
+                
+            pietro = self.Floor_list[floor_idx]
+            
+            # Wymiary mapy budynku (piętra)
+            H_map, W_map = pietro.cover.shape
+            
+            # Wymiary małej kratki routera
+            local_grid = router.coverage_grid
+            start_row, start_col = router.grid_corner # Lewy górny róg na mapie globalnej
+            h_local, w_local = local_grid.shape
+            
+            # Zakresy na mapie głównej (ograniczone wymiarami piętra)
+            global_r_start = max(0, start_row)
+            global_r_end = min(H_map, start_row + h_local)
+            global_c_start = max(0, start_col)
+            global_c_end = min(W_map, start_col + w_local)
+            
+            # Jeśli router jest całkowicie poza mapą (teoretycznie niemożliwe, ale bezpieczne)
+            if global_r_start >= global_r_end or global_c_start >= global_c_end:
+                scores.append(0.0)
+                continue
+                
+            # Przeliczamy te zakresy na współrzędne wewnątrz małej kratki routera
+            local_r_start = global_r_start - start_row
+            local_r_end = local_r_start + (global_r_end - global_r_start)
+            local_c_start = global_c_start - start_col
+            local_c_end = local_c_start + (global_c_end - global_c_start)
+            
+            # Wycinamy odpowiednie fragmenty
+            cover_slice = pietro.cover[global_r_start:global_r_end, global_c_start:global_c_end]
+            signal_slice = local_grid[local_r_start:local_r_end, local_c_start:local_c_end]
+            
+            # Mnożymy element po elemencie (Waga * Sygnał) i sumujemy wszystko
+            # To daje jedną liczbę określającą, jak bardzo ten router jest potrzebny
+            score = np.sum(cover_slice * signal_slice)
+            
+            scores.append(float(score))
+            
+        return scores
 
 class Router:
     def __init__(self, Power: float, Max_users: int, Max_range: int):
@@ -644,52 +705,66 @@ class TabuSearch:
 
     def greedy_initial_solution(self):
         """
-        Tworzy rozwiązanie początkowe metodą zachłanną.
-        Wstawia routery tam, gdzie jest największe 'niezaspokojone' zapotrzebowanie.
-        """        
-        # Resetujemy rozwiązanie
+        Tworzy rozwiązanie początkowe metodą zachłanną z optymalizacją (step).
+        """            
         num_possible = len(self.building.router_possible)
         self.current_solution = [-1] * num_possible
         used_positions = set()
         
-        # Kopia mapy potrzeb - będziemy ją modyfikować (zmniejszać wagi tam, gdzie już jest zasięg)
-        # Zakładamy pracę na piętrze 0
+        # Kopia mapy potrzeb
         current_needs = self.building.Floor_list[0].cover.copy() 
         
-        # Iterujemy po dostępnych routerach
+        # KROK (STEP): Jak gęsto sprawdzamy mapę?
+        # step = 1  -> sprawdza każdy możliwy punkt (dokładne, ale wolne)
+        # step = 10 -> sprawdza co 10-ty punkt (szybkie, dobre dla dużych map 256x256)
+        step = 5 
+        
+        # Pętla po wszystkich dostępnych routerach (stawiamy je po kolei)
         for r_idx, router in enumerate(self.available_routers):
+            
             best_pos = -1
             best_score = -float('inf')
             
-            # Sprawdzamy każdą możliwą pozycję (dla przyspieszenia można sprawdzać co N-tą)
-            for pos_idx, point in enumerate(self.building.router_possible):
+            # --- 1. PĘTLA SZUKANIA (SKANOWANIE MAPY) ---
+            # Sprawdzamy co N-ty punkt, żeby nie liczyć w nieskończoność
+            for pos_idx in range(0, num_possible, step):
+                
+                # Jeśli to miejsce jest już zajęte przez poprzedni router -> pomiń
                 if pos_idx in used_positions:
                     continue
                 
-                # Symulujemy ustawienie routera
+                # Pobieramy punkt z listy wszystkich możliwych
+                point = self.building.router_possible[pos_idx]
+                
+                # 2. SYMULACJA
                 router.position = point
                 router.calculate_coverage(self.building)
                 
-                # Obliczamy 'zysk' dla TYMCZASOWYCH potrzeb (current_needs)
+                # 3. OCENA ZYSKU
                 score = self._calculate_marginal_gain(router, current_needs)
                 
+                # Jeśli to miejsce jest lepsze niż dotychczas znalezione dla tego routera
                 if score > best_score:
                     best_score = score
-                    best_pos = pos_idx
+                    best_pos = pos_idx # <--- ZAPAMIĘTUJEMY TYLKO INDEKS!
+
+            # --- 4. PRZYPISANIE (TO JEST KLUCZOWE) ---
+            # Pętla szukania się skończyła. Mamy w 'best_pos' indeks najlepszego miejsca.
+            # Teraz faktycznie stawiamy tam router.
             
-            # Zatwierdzamy najlepszą pozycję dla tego routera
             if best_pos != -1:
+                # Zapisujemy w wektorze rozwiązania
                 self.current_solution[best_pos] = r_idx
                 used_positions.add(best_pos)
                 
-                # Ustawiamy router finalnie
+                # Ustawiamy router fizycznie w najlepszym znalezionym punkcie
                 router.position = self.building.router_possible[best_pos]
                 router.calculate_coverage(self.building)
                 
-                # KLUCZOWE: Aktualizujemy mapę potrzeb. 
-                # Tam gdzie router dał sygnał, potrzeby spadają do 0.
+                # Aktualizujemy mapę potrzeb (wygaszamy popyt tam, gdzie router dał sygnał)
                 self._subtract_needs(router, current_needs)
 
+        # Koniec - zapisujemy wyniki
         self.best_solution = self.current_solution.copy()
         self.best_value = self.evaluate_solution()
 
@@ -777,7 +852,69 @@ class TabuSearch:
         
         # Zerujemy potrzeby w tych miejscach
         needs_slice[mask] = 0
+    
+    def smart_local_change(self):
+        """
+        Generuje jednego sąsiada:
+        1. Liczy użyteczność routerów.
+        2. Wybiera jednego z najgorszych (żeby spróbować go poprawić).
+        3. Przesuwa go w losowe wolne miejsce.
+        """
+        # 1. Obliczamy, jak przydatny jest każdy router w obecnym układzie
+        # (Zwraca listę floatów, gdzie indeks to ID routera)
+        usefulness_scores = self.building.calculate_router_usefulness()
         
+        # 2. Tworzymy listę aktywnych routerów wraz z ich wynikami i pozycjami
+        active_routers = []
+        for pos_idx, router_id in enumerate(self.current_solution):
+            if router_id != -1:
+                # Pobieramy wynik dla tego routera (zabezpieczenie przed błędem indeksu)
+                score = usefulness_scores[router_id] if router_id < len(usefulness_scores) else 0.0
+                active_routers.append({'pos_idx': pos_idx, 'router_id': router_id, 'score': score})
+        
+        # Zabezpieczenie: jeśli nie ma routerów na planszy, zwracamy to co mamy
+        if not active_routers:
+            return self.current_solution.copy()
+
+        # 3. Sortujemy rosnąco (najgorsze wyniki na początku)
+        active_routers.sort(key=lambda x: x['score'])
+        
+        # 4. Wybieramy kandydata do przesunięcia.
+        # WAŻNE: Nie bierzemy zawsze indexu [0] (najgorszego), bo algorytm wpadnie w pętlę.
+        # Losujemy jednego z 3 najgorszych. To daje algorytmowi "oddech".
+        import random
+        n_worst = min(3, len(active_routers))
+        candidate = active_routers[random.randint(0, n_worst - 1)]
+        
+        old_pos_idx = candidate['pos_idx']
+        router_id = candidate['router_id']
+        
+        # 5. Znajdujemy wolne miejsca na mapie
+        free_indices = [i for i, val in enumerate(self.current_solution) if val == -1]
+        
+        # Jeśli nie ma gdzie przesunąć, zwracamy bez zmian
+        if not free_indices:
+            return self.current_solution.copy()
+            
+        # Losujemy nowe miejsce
+        new_pos_idx = random.choice(free_indices)
+        
+        # 6. Tworzymy nowe rozwiązanie (wektor)
+        new_solution = self.current_solution.copy()
+        new_solution[old_pos_idx] = -1      # Stare miejsce zwalniamy
+        new_solution[new_pos_idx] = router_id # Nowe miejsce zajmujemy
+        
+        # 7. AKTUALIZACJA FIZYCZNA ROUTERA
+        # Musimy zaktualizować obiekt routera, żeby calculate_coverage policzyło nowy zasięg
+        new_point = self.building.router_possible[new_pos_idx]
+        self.available_routers[router_id].position = new_point
+        self.available_routers[router_id].calculate_coverage(self.building)
+        
+        # Aktualizujemy stan w obiekcie TabuSearch
+        self.current_solution = new_solution
+        
+        return new_solution       
+    
     def run(self) -> Tuple[List[int], float, dict]:
         """
         Uruchamia algorytm Tabu Search.
@@ -790,7 +927,7 @@ class TabuSearch:
         aspiration_criteria_counter = 0
         for iteration in range(self.max_iterations):
             # Generuj sąsiada
-            neighbor = self.local_change()
+            neighbor = self.smart_local_change()
             
             # Oceń sąsiada
             neighbor_value = self.evaluate_solution()

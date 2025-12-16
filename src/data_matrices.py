@@ -618,7 +618,7 @@ class TabuSearch:
         
         # Losowy router do przesunięcia
         pos = np.random.choice(router_positions)
-        router_id = self.current_solution[pos]
+        router_id = self.current_solution[pos] #ruter_id to numer rutera na liście self.available_routers
         
         # Znajdź wolne pozycje (wartość == -1)
         free_positions = [i for i in range(num_possible) if self.current_solution[i] == -1]

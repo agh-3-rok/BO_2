@@ -77,7 +77,8 @@ class Building:
             self.__get_points_to_calculate()
         )  # od razu buduje liste punktów do obliczenia zasięgu dla łatwiejszego dostępu
         self.Floor_heights = Floor_heights
-
+        self.available_routers = available_routers
+        
     def __get_possible_router_positions(self) -> List:
         """
         Zwraca listę krotek (x, y, Floor_number) z możliwymi pozycjami routerów w całym budynku
@@ -485,8 +486,8 @@ class Router:
         
         self.coverage_grid = local_router_square
         self.grid_corner = (left_upper_x, left_upper_y)
-        
-        
+    
+             
 class TabuSearch:
     """
     Algorytm Tabu Search dla optymalizacji rozmieszczenia routerów w budynku.
@@ -640,7 +641,143 @@ class TabuSearch:
         # Przypisz nowe rozwiązanie do current_solution
         self.current_solution = new_solution
         return new_solution
-    
+
+    def greedy_initial_solution(self):
+        """
+        Tworzy rozwiązanie początkowe metodą zachłanną.
+        Wstawia routery tam, gdzie jest największe 'niezaspokojone' zapotrzebowanie.
+        """        
+        # Resetujemy rozwiązanie
+        num_possible = len(self.building.router_possible)
+        self.current_solution = [-1] * num_possible
+        used_positions = set()
+        
+        # Kopia mapy potrzeb - będziemy ją modyfikować (zmniejszać wagi tam, gdzie już jest zasięg)
+        # Zakładamy pracę na piętrze 0
+        current_needs = self.building.Floor_list[0].cover.copy() 
+        
+        # Iterujemy po dostępnych routerach
+        for r_idx, router in enumerate(self.available_routers):
+            best_pos = -1
+            best_score = -float('inf')
+            
+            # Sprawdzamy każdą możliwą pozycję (dla przyspieszenia można sprawdzać co N-tą)
+            for pos_idx, point in enumerate(self.building.router_possible):
+                if pos_idx in used_positions:
+                    continue
+                
+                # Symulujemy ustawienie routera
+                router.position = point
+                router.calculate_coverage(self.building)
+                
+                # Obliczamy 'zysk' dla TYMCZASOWYCH potrzeb (current_needs)
+                score = self._calculate_marginal_gain(router, current_needs)
+                
+                if score > best_score:
+                    best_score = score
+                    best_pos = pos_idx
+            
+            # Zatwierdzamy najlepszą pozycję dla tego routera
+            if best_pos != -1:
+                self.current_solution[best_pos] = r_idx
+                used_positions.add(best_pos)
+                
+                # Ustawiamy router finalnie
+                router.position = self.building.router_possible[best_pos]
+                router.calculate_coverage(self.building)
+                
+                # KLUCZOWE: Aktualizujemy mapę potrzeb. 
+                # Tam gdzie router dał sygnał, potrzeby spadają do 0.
+                self._subtract_needs(router, current_needs)
+
+        self.best_solution = self.current_solution.copy()
+        self.best_value = self.evaluate_solution()
+
+    def _calculate_marginal_gain(self, router, current_needs) -> float:
+            """
+            Liczy, ile 'punktów potrzeby' zaspokoi ten router w danej pozycji.
+            """
+            # Jeśli router nie ma policzonego zasięgu, nie daje zysku
+            if router.coverage_grid is None or router.grid_corner is None:
+                return 0.0
+                
+            # Wymiary mapy globalnej (current_needs)
+            H, W = current_needs.shape
+            
+            # Wymiary i pozycja mapy lokalnej routera
+            local_grid = router.coverage_grid
+            start_row, start_col = router.grid_corner
+            h_local, w_local = local_grid.shape
+            
+            # --- LOGIKA WYCINANIA (SLICING) ---
+            # 1. Ustalamy zakresy na mapie globalnej (przycinamy do granic budynku)
+            global_r_start = max(0, start_row)
+            global_r_end = min(H, start_row + h_local)
+            global_c_start = max(0, start_col)
+            global_c_end = min(W, start_col + w_local)
+            
+            # Jeśli router jest całkowicie poza mapą
+            if global_r_start >= global_r_end or global_c_start >= global_c_end:
+                return 0.0
+                
+            # 2. Ustalamy odpowiadające zakresy na mapie lokalnej routera
+            local_r_start = global_r_start - start_row
+            local_r_end = local_r_start + (global_r_end - global_r_start)
+            local_c_start = global_c_start - start_col
+            local_c_end = local_c_start + (global_c_end - global_c_start)
+            
+            # --- OBLICZENIA ---
+            # Wycinamy fragmenty macierzy
+            needs_slice = current_needs[global_r_start:global_r_end, global_c_start:global_c_end]
+            router_slice = local_grid[local_r_start:local_r_end, local_c_start:local_c_end]
+            
+            # Mnożymy: Waga potrzeby * Siła sygnału. Sumujemy, by dostać jedną liczbę (score).
+            gain = np.sum(needs_slice * router_slice)
+            
+            return float(gain)
+
+    def _subtract_needs(self, router, current_needs):
+        """
+        Zeruje wagi w macierzy current_needs tam, gdzie router dostarczył sygnał.
+        Dzięki temu kolejne routery nie będą celować w to samo miejsce.
+        """
+        if router.coverage_grid is None or router.grid_corner is None:
+            return
+
+        # Wymiary mapy globalnej
+        H, W = current_needs.shape
+        
+        local_grid = router.coverage_grid
+        start_row, start_col = router.grid_corner
+        h_local, w_local = local_grid.shape
+        
+        # --- LOGIKA WYCINANIA (identyczna jak wyżej) ---
+        global_r_start = max(0, start_row)
+        global_r_end = min(H, start_row + h_local)
+        global_c_start = max(0, start_col)
+        global_c_end = min(W, start_col + w_local)
+        
+        if global_r_start >= global_r_end or global_c_start >= global_c_end:
+            return
+
+        local_r_start = global_r_start - start_row
+        local_r_end = local_r_start + (global_r_end - global_r_start)
+        local_c_start = global_c_start - start_col
+        local_c_end = local_c_start + (global_c_end - global_c_start)
+
+        # --- AKTUALIZACJA POTRZEB ---
+        # Pobieramy wycinki (widoki na macierze)
+        needs_slice = current_needs[global_r_start:global_r_end, global_c_start:global_c_end]
+        router_slice = local_grid[local_r_start:local_r_end, local_c_start:local_c_end]
+        
+        # Gdzie sygnał routera jest > 0, tam ustawiamy potrzebę na 0.
+        # (Zakładamy, że jeśli router tu sięga, to temat jest załatwiony).
+        # Używamy maski logicznej numpy:
+        mask = router_slice > 0
+        
+        # Zerujemy potrzeby w tych miejscach
+        needs_slice[mask] = 0
+        
     def run(self) -> Tuple[List[int], float, dict]:
         """
         Uruchamia algorytm Tabu Search.
@@ -649,8 +786,8 @@ class TabuSearch:
             (best_solution, best_value, history)
         """
         # print("=== Start Tabu Search ===")
-        self.initial_solution()
-        
+        self.greedy_initial_solution()
+        aspiration_criteria_counter = 0
         for iteration in range(self.max_iterations):
             # Generuj sąsiada
             neighbor = self.local_change()
@@ -666,6 +803,7 @@ class TabuSearch:
             if not is_tabu:
                 accept = True
             elif self.aspiration_criteria(neighbor):
+                aspiration_criteria_counter += 1
                 accept = True
             
             if accept:
@@ -706,6 +844,6 @@ class TabuSearch:
         # print(f"\n=== Koniec ===")
         # print(f"Najlepsza wartość: {self.best_value:.2f}")
         
-        return self.best_solution, self.best_value, self.history
+        return self.best_solution, self.best_value, self.history, aspiration_criteria_counter
         
     

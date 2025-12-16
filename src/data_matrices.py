@@ -541,9 +541,9 @@ class Router:
         for i in range(self.max_range):
             for j in range(self.max_range):
                 if (left_upper_x + i, left_upper_y + j) != (self.position.x, self.position.y):
-                    local_router_square[i, j] = 10**(building.goal_function_point(Point(left_upper_x + i, left_upper_y + j, 0), self.position, 2)/10)
+                    local_router_square[i, j] = 10**(building.goal_function_point(Point(left_upper_x + i, left_upper_y + j, 0), self.position, self.power)/10)
                 else:
-                    local_router_square[i, j] = 3 #WARTOŚĆ SYGNAŁU W MIEJSCU RUTERA
+                    local_router_square[i, j] = 10**(self.power/10) #WARTOŚĆ SYGNAŁU W MIEJSCU RUTERA
         
         self.coverage_grid = local_router_square
         self.grid_corner = (left_upper_x, left_upper_y)
@@ -703,7 +703,7 @@ class TabuSearch:
         self.current_solution = new_solution
         return new_solution
 
-    def greedy_initial_solution(self):
+    def greedy_initial_solution(self, step):
         """
         Tworzy rozwiązanie początkowe metodą zachłanną z optymalizacją (step).
         """            
@@ -717,7 +717,6 @@ class TabuSearch:
         # KROK (STEP): Jak gęsto sprawdzamy mapę?
         # step = 1  -> sprawdza każdy możliwy punkt (dokładne, ale wolne)
         # step = 10 -> sprawdza co 10-ty punkt (szybkie, dobre dla dużych map 256x256)
-        step = 5 
         
         # Pętla po wszystkich dostępnych routerach (stawiamy je po kolei)
         for r_idx, router in enumerate(self.available_routers):
@@ -923,7 +922,7 @@ class TabuSearch:
             (best_solution, best_value, history)
         """
         # print("=== Start Tabu Search ===")
-        self.greedy_initial_solution()
+        # self.greedy_initial_solution(step)
         aspiration_criteria_counter = 0
         for iteration in range(self.max_iterations):
             # Generuj sąsiada

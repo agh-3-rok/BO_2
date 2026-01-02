@@ -30,7 +30,7 @@ class TabuSearch:
         self.min_distance = min_distance
         
         # Stan algorytmu
-        self.tabu_list = []
+        self.tabu_list: List[int] = []
         self.current_solution = None
         self.best_solution = None
         self.best_value = float('-inf')
@@ -205,7 +205,6 @@ class TabuSearch:
         
         return router_id, pos, neighbor_pos
 
-
     def smart_local_change(self) -> Optional[Tuple[int, int, int]]:
         """
         1. Znajduje jeden z najmniej przydatnych routerów.
@@ -309,10 +308,10 @@ class TabuSearch:
         # Start (jeśli nie wywołano wcześniej init)
         if self.current_solution is None:
             self.weighted_random_initial_solution()
-            
-        print(f"Start Value: {self.best_value:.2f}")
 
         aspiration_cnt = 0
+        
+        self.tabu_list = []
         
         # Główna pętla
         for iteration in range(self.max_iterations):
@@ -325,6 +324,10 @@ class TabuSearch:
             
             #sprawdzenie czy nie wrzuciło rutera obok innego, jeśli tak to w ogole pomija możliwośc
             if not self._is_location_safe_for_router(r_id, new_p):
+                if self.history['current_values']:
+                    self.history['iterations'].append(iteration)
+                    self.history['best_values'].append(self.best_value)
+                    self.history['current_values'].append(self.history['current_values'][-1])
                 continue
             
             # wykonanie ruchu
@@ -332,9 +335,9 @@ class TabuSearch:
             current_val = self.evaluate_solution()
     
             
-            # sprawdzenie w tabu
-            solution_signature = tuple(self.current_solution)
-            is_tabu = solution_signature in self.tabu_list
+            # sprawdzenie w tabu - NOWA LOGIKA TABU bo nie dzialalo kryterium aspiracji
+            # Sprawdzamy: Czy ten router był niedawno ruszany?
+            is_tabu = r_id in self.tabu_list
             
             # ocena rozwiązania
             accept = False
@@ -342,17 +345,17 @@ class TabuSearch:
             if not is_tabu:
                 accept = True
             elif current_val > self.best_value:
-                # TODO: Inne kryterium aspiracji dodać
+                # TODO: Inne kryterium aspiracji dodać ewentualnie?
                 accept = True
                 aspiration_cnt += 1
             
             if accept:
                 #ruch przyjęty
-                self.tabu_list.append(solution_signature)
+                self.tabu_list.append(r_id) # dodajemy ruter do tabu
+                
                 if len(self.tabu_list) > self.tabu_length:
                     self.tabu_list.pop(0)
                 
-                # zmiana najlepszego rozwiązania
                 if current_val > self.best_value:
                     self.best_solution = list(self.current_solution)
                     self.best_value = current_val

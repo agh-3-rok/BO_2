@@ -13,10 +13,10 @@ NUM_ROUTERS = 5
 ROUTER_RANGE = 15
 ROUTER_POWER = 20
 MIN_DIST = 20          
-MAX_ITER = 500         # Iteracje na jedno uruchomienie
+MAX_ITER = 200         # Iteracje na jedno uruchomienie
 TABU_LEN = 12
 
-NUM_RUNS = 20            # <--- ILE RAZY URUCHOMIĆ ALGORYTM NA TEJ SAMEJ MAPIE
+NUM_RUNS = 100            # <--- ILE RAZY URUCHOMIĆ ALGORYTM NA TEJ SAMEJ MAPIE
 
 def generate_office_layout(size, num_rooms=8):
     """Generuje mapę biura (kod bez zmian)."""

@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 import random
 
 # IMPORTUJEMY klasy z pliku models.py
@@ -110,6 +110,7 @@ class TabuSearch:
         
         # Losujemy N unikalnych pozycji na podstawie wag priorytetów
         # replace=False zapewnia brak duplikatów
+        # p=probs - Funkcja nie traktuje każdego indeksu równo. Indeks z wagą 10 ma 10 razy większą szansę bycia wylosowanym niż indeks z wagą 1.
         chosen_indices = np.random.choice(indices, num_routers, replace=False, p=probs)
         
         # Budujemy wektor rozwiązania
@@ -125,7 +126,6 @@ class TabuSearch:
         self.best_solution = solution.copy()
         self.best_value = self.evaluate_solution()
         
-    
     def evaluate_solution(self) -> float:
         """
         Oblicza wartość funkcji celu dla bieżącego rozwiązania.
@@ -214,69 +214,61 @@ class TabuSearch:
         
         # Przypisz nowe rozwiązanie do current_solution
         self.current_solution = new_solution
-        return new_solution
-  
-    def smart_local_change(self):
+        return new_solution  
+    
+    def smart_local_change(self) -> Optional[Tuple[int, int, int]]:
         """
-        Generuje jednego sąsiada:
-        1. Liczy użyteczność routerów.
-        2. Wybiera jednego z najgorszych (żeby spróbować go poprawić).
-        3. Przesuwa go w losowe wolne miejsce.
+        1. Znajduje jeden z najmniej przydatnych routerów.
+        2. Znajduje dla niego nowe, losowe miejsce (preferując te z wysokim cover).
+        3. Zwraca instrukcję ruchu: (id_routera, stara_pozycja, nowa_pozycja).
+        NIE MODYFIKUJE STANU.
         """
-        # 1. Obliczamy, jak przydatny jest każdy router w obecnym układzie
-        # (Zwraca listę floatów, gdzie indeks to ID routera)
+        # Policz przydatność każdego routera
         usefulness_scores = self.building.calculate_router_usefulness()
         
-        # 2. Tworzymy listę aktywnych routerów wraz z ich wynikami i pozycjami
         active_routers = []
-        for pos_idx, router_id in enumerate(self.current_solution):
-            if router_id != -1:
-                # Pobieramy wynik dla tego routera (zabezpieczenie przed błędem indeksu)
-                score = usefulness_scores[router_id] if router_id < len(usefulness_scores) else 0.0
-                active_routers.append({'pos_idx': pos_idx, 'router_id': router_id, 'score': score})
+        for pos_idx, r_id in enumerate(self.current_solution):
+            if r_id != -1:
+                # Pobierz wynik routera (zabezpieczenie indeksu)
+                score = usefulness_scores[r_id] if r_id < len(usefulness_scores) else 0
+                active_routers.append({'pos': pos_idx, 'id': r_id, 'score': score})
         
-        # Zabezpieczenie: jeśli nie ma routerów na planszy, zwracamy to co mamy
         if not active_routers:
-            return self.current_solution.copy()
+            return None
 
-        # 3. Sortujemy rosnąco (najgorsze wyniki na początku)
+        # Wybierz kandydata do ruchu (jeden z 2 najgorszych)
         active_routers.sort(key=lambda x: x['score'])
+        n_candidates = min(2, len(active_routers)) 
+        candidate = active_routers[random.randint(0, n_candidates - 1)]
         
-        # 4. Wybieramy kandydata do przesunięcia.
-        # WAŻNE: Nie bierzemy zawsze indexu [0] (najgorszego), bo algorytm wpadnie w pętlę.
-        # Losujemy jednego z 3 najgorszych. To daje algorytmowi "oddech".
-        import random
-        n_worst = min(3, len(active_routers))
-        candidate = active_routers[random.randint(0, n_worst - 1)]
+        router_id = candidate['id']
+        old_pos_idx = candidate['pos']
         
-        old_pos_idx = candidate['pos_idx']
-        router_id = candidate['router_id']
+        # Wybierz nowe miejsce (Celujemy w High Priority)
+        indices = self.high_priority_indices
+        probs = self.high_priority_probs
         
-        # 5. Znajdujemy wolne miejsca na mapie
-        free_indices = [i for i, val in enumerate(self.current_solution) if val == -1]
+        if not indices: # Fallback
+             indices = list(range(len(self.current_solution)))
+             probs = None
+
+        new_pos_idx = old_pos_idx
+        # Próbujemy 10 razy wylosować WOLNE miejsce
+        for _ in range(10):
+            try_idx = np.random.choice(indices, p=probs)
+            if self.current_solution[try_idx] == -1: # Jeśli wolne
+                new_pos_idx = try_idx
+                break
         
-        # Jeśli nie ma gdzie przesunąć, zwracamy bez zmian
-        if not free_indices:
-            return self.current_solution.copy()
-            
-        # Losujemy nowe miejsce
-        new_pos_idx = random.choice(free_indices)
-        
-        # 6. Tworzymy nowe rozwiązanie (wektor)
-        new_solution = self.current_solution.copy()
-        new_solution[old_pos_idx] = -1      # Stare miejsce zwalniamy
-        new_solution[new_pos_idx] = router_id # Nowe miejsce zajmujemy
-        
-        # 7. AKTUALIZACJA FIZYCZNA ROUTERA
-        # Musimy zaktualizować obiekt routera, żeby calculate_coverage policzyło nowy zasięg
-        new_point = self.building.router_possible[new_pos_idx]
-        self.available_routers[router_id].position = new_point
-        self.available_routers[router_id].calculate_coverage(self.building)
-        
-        # Aktualizujemy stan w obiekcie TabuSearch
-        self.current_solution = new_solution
-        
-        return new_solution       
+        # Jeśli nie trafiliśmy w wolne priorytetowe, bierzemy losowe wolne z całej mapy
+        if new_pos_idx == old_pos_idx:
+            free_slots = [i for i, v in enumerate(self.current_solution) if v == -1]
+            if free_slots:
+                new_pos_idx = random.choice(free_slots)
+            else:
+                return None # Brak miejsca na ruch
+
+        return (router_id, old_pos_idx, new_pos_idx)
     
     def run(self) -> Tuple[List[int], float, dict]:
         """
@@ -285,8 +277,7 @@ class TabuSearch:
         Returns:
             (best_solution, best_value, history)
         """
-        # print("=== Start Tabu Search ===")
-        # self.greedy_initial_solution(step)
+
         aspiration_criteria_counter = 0
         for iteration in range(self.max_iterations):
             # Generuj sąsiada

@@ -18,7 +18,3 @@ def goal_function(building: dm.Building, ranges_matrix: np.ndarray) -> float:
     # NARAZIE POMIJAM ILOSC PIĘTER WYSTACZY DODAC FOR PO PIĘTRACH POTEM
     return np.sum(building.cover * ranges_matrix)
 
-
-    
-
-

@@ -70,6 +70,8 @@ class TabuSearch:
         
 
         self.current_solution = solution
+        self.best_solution = solution.copy()
+        self.best_value = self.evaluate_solution()
         
     def _get_high_priority_indices(self):
         """
@@ -97,8 +99,7 @@ class TabuSearch:
 
     def weighted_random_initial_solution(self):
         """
-        NOWE PODEJŚCIE: Losuje pozycje, ale z większym prawdopodobieństwem
-        tam, gdzie waga 'cover' jest duża. Szybkie i daje niezły start.
+        Losuje pozycje, ale z większym prawdopodobieństwem tam, gdzie waga 'cover' jest duża
         """
         num_routers = len(self.available_routers)
         indices, probs = self.high_priority_indices
@@ -202,20 +203,9 @@ class TabuSearch:
         
         neighbor_pos = np.random.choice(free_positions)
         
-        new_solution = self.current_solution.copy()
-        new_solution[pos] = -1  # Stara pozycja staje się wolna
-        new_solution[neighbor_pos] = router_id  # Nowa pozycja dostaje routera
-        
-        # Zaktualizuj pozycję routera
-        self.available_routers[router_id].position = self.building.router_possible[neighbor_pos]
-        
-        # Przelicz kratkę zasięgu dla zmienionego routera
-        self.available_routers[router_id].calculate_coverage(self.building)
-        
-        # Przypisz nowe rozwiązanie do current_solution
-        self.current_solution = new_solution
-        return new_solution  
-    
+        return router_id, pos, neighbor_pos
+
+
     def smart_local_change(self) -> Optional[Tuple[int, int, int]]:
         """
         1. Znajduje jeden z najmniej przydatnych routerów.

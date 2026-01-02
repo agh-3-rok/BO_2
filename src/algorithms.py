@@ -1,8 +1,6 @@
 import numpy as np
 from typing import List, Tuple, Optional
 import random
-
-# IMPORTUJEMY klasy z pliku models.py
 from data_matrices import Building, Router
 
 class TabuSearch:
@@ -245,8 +243,7 @@ class TabuSearch:
         old_pos_idx = candidate['pos']
         
         # Wybierz nowe miejsce (Celujemy w High Priority)
-        indices = self.high_priority_indices
-        probs = self.high_priority_probs
+        indices, probs = self.high_priority_indices
         
         if not indices: # Fallback
              indices = list(range(len(self.current_solution)))

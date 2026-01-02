@@ -14,6 +14,7 @@ class TabuSearch:
         available_routers: List[Router],
         tabu_length: int = 10,
         max_iterations: int = 100,
+        min_distance: float = 4.0
     ):
         """
         Args:
@@ -26,6 +27,7 @@ class TabuSearch:
         self.available_routers = available_routers
         self.tabu_length = tabu_length
         self.max_iterations = max_iterations
+        self.min_distance = min_distance
         
         # Stan algorytmu
         self.tabu_list = []
@@ -287,27 +289,29 @@ class TabuSearch:
         self.available_routers[router_id].position = old_point
         self.available_routers[router_id].calculate_coverage(self.building)
 
-    def _are_routers_separated(self) -> bool:
-        """
-        Zwraca True tylko wtedy, gdy KAŻDA para routerów jest oddalona o min_distance.
-        Szybki "fail-fast" - przerywa przy pierwszej kolizji.
-        """
-        active_routers = [r for r in self.available_routers if r.position is not None]
-        count = len(active_routers)
-        
-        # Iterujemy po parach, żeby sprawdzić odległość
-        for i in range(count):
-            for j in range(i + 1, count):
-                p1 = active_routers[i].position
-                p2 = active_routers[j].position
+    def _is_location_safe_for_router(self, router_id_to_move: int, new_pos_idx: int) -> bool:
+            """
+            Sprawdza, czy postawienie KONKRETNEGO routera w NOWYM miejscu
+            nie spowoduje kolizji z pozostałymi routerami.
+            Nie obchodzi nas, czy inne routery kolidują ze sobą - naprawiamy to krok po kroku.
+            """
+            # Pobieramy współrzędne miejsca, w które chcemy skoczyć
+            new_point = self.building.router_possible[new_pos_idx]
+            
+            # Iterujemy po wszystkich routerach
+            for r_idx, router in enumerate(self.available_routers):
+                # Pomijamy router, który właśnie przesuwamy (bo on zaraz zniknie ze starego miejsca)
+                # Pomijamy też routery, które nie są jeszcze ustawione (jeśli takie są)
+                if r_idx == router_id_to_move or router.position is None:
+                    continue
                 
-                # Używamy metody z Building do liczenia dystansu
-                dist = self.building.point_distance(p1, p2)
+                # Sprawdzamy dystans do "sąsiada"
+                dist = self.building.point_distance(new_point, router.position)
                 
                 if dist < self.min_distance:
-                    return False 
-        
-        return True 
+                    return False # Kolizja z innym routerem!
+            
+            return True # Miejsce jest czyste
     
     def run(self) -> Tuple[List[int], float, dict, int]:
         """Główna pętla algorytmu."""
@@ -329,24 +333,23 @@ class TabuSearch:
                 
             r_id, old_p, new_p = move
             
+            #sprawdzenie czy nie wrzuciło rutera obok innego, jeśli tak to w ogole pomija możliwośc
+            if not self._is_location_safe_for_router(r_id, new_p):
+                continue
+            
             # wykonanie ruchu
             self._apply_move(r_id, old_p, new_p)
             current_val = self.evaluate_solution()
-            
-            # sprawdzenie czy rutery są wystarczająco daleko od siebie
-            is_separated = self._are_routers_separated()
+    
             
             # sprawdzenie w tabu
-            solution_signature = tuple(self.current_solution) # Krotka jest hashowalna
+            solution_signature = tuple(self.current_solution)
             is_tabu = solution_signature in self.tabu_list
             
             # ocena rozwiązania
             accept = False
             
-            if not is_separated:
-                # routery są za blisko.
-                accept = False
-            elif not is_tabu:
+            if not is_tabu:
                 accept = True
             elif current_val > self.best_value:
                 # TODO: Inne kryterium aspiracji dodać

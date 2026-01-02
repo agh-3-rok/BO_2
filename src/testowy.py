@@ -1,11 +1,12 @@
 import numpy as np
 import random
 import data_matrices
+import algorithms
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
 # --- KONFIGURACJA ---
-MAP_SIZE = 256      # Rozmiar mapy (np. 100x100)
+MAP_SIZE = 50      # Rozmiar mapy (np. 100x100)
 NUM_ROUTERS = 5     # Liczba routerów do rozmieszczenia
 ROUTER_RANGE = 50   # Zasięg routera (promień w kratkach)
 WALL_DAMPING = 2.0  # Współczynnik tłumienia ścian
@@ -179,7 +180,7 @@ budynek.available_routers = routers_list
 # - restore_solution_state
 # Oraz w Building metodę calculate_router_usefulness
 
-tabu = data_matrices.TabuSearch(
+tabu = algorithms.TabuSearch(
     building=budynek, 
     available_routers=routers_list, 
     max_iterations=MAX_ITERATIONS,  # Mniej iteracji na dużej mapie dla testu
@@ -192,8 +193,10 @@ print("To może chwilę potrwać na dużej mapie...")
 # Zalecam użycie greedy_initial_solution jeśli ją zaimplementowałeś
 
 
-tabu.greedy_initial_solution(STEP) # lub tabu.initial_solution() - greedy lepsze wykorzystuje uzytecznosc rutera, jako argument przyujmuje krok z jakim ustawia rutery
+tabu.weighted_random_initial_solution() # lub tabu.initial_solution() - greedy lepsze wykorzystuje uzytecznosc rutera, jako argument przyujmuje krok z jakim ustawia rutery
 initial_val = tabu.evaluate_solution()
+print(initial_val)
+
 print(f"-> Wartość startowa: {initial_val:.2f}")
 
 print("\n" + "-" * 40)

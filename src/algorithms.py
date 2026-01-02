@@ -287,6 +287,28 @@ class TabuSearch:
         self.available_routers[router_id].position = old_point
         self.available_routers[router_id].calculate_coverage(self.building)
 
+    def _are_routers_separated(self) -> bool:
+        """
+        Zwraca True tylko wtedy, gdy KAŻDA para routerów jest oddalona o min_distance.
+        Szybki "fail-fast" - przerywa przy pierwszej kolizji.
+        """
+        active_routers = [r for r in self.available_routers if r.position is not None]
+        count = len(active_routers)
+        
+        # Iterujemy po parach, żeby sprawdzić odległość
+        for i in range(count):
+            for j in range(i + 1, count):
+                p1 = active_routers[i].position
+                p2 = active_routers[j].position
+                
+                # Używamy metody z Building do liczenia dystansu
+                dist = self.building.point_distance(p1, p2)
+                
+                if dist < self.min_distance:
+                    return False 
+        
+        return True 
+    
     def run(self) -> Tuple[List[int], float, dict, int]:
         """Główna pętla algorytmu."""
         
@@ -311,13 +333,20 @@ class TabuSearch:
             self._apply_move(r_id, old_p, new_p)
             current_val = self.evaluate_solution()
             
+            # sprawdzenie czy rutery są wystarczająco daleko od siebie
+            is_separated = self._are_routers_separated()
+            
             # sprawdzenie w tabu
             solution_signature = tuple(self.current_solution) # Krotka jest hashowalna
             is_tabu = solution_signature in self.tabu_list
             
             # ocena rozwiązania
             accept = False
-            if not is_tabu:
+            
+            if not is_separated:
+                # routery są za blisko.
+                accept = False
+            elif not is_tabu:
                 accept = True
             elif current_val > self.best_value:
                 # TODO: Inne kryterium aspiracji dodać

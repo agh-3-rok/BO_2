@@ -267,71 +267,102 @@ class TabuSearch:
 
         return (router_id, old_pos_idx, new_pos_idx)
     
-    def run(self) -> Tuple[List[int], float, dict]:
-        """
-        Uruchamia algorytm Tabu Search.
+    def _apply_move(self, router_id, old_pos, new_pos):
+        """Wykonuje ruch: aktualizuje tablicę solution oraz fizyczną pozycję routera."""
+        self.current_solution[old_pos] = -1
+        self.current_solution[new_pos] = router_id
         
-        Returns:
-            (best_solution, best_value, history)
-        """
+        # Przestaw router fizycznie i przelicz zasięg
+        new_point = self.building.router_possible[new_pos]
+        self.available_routers[router_id].position = new_point
+        self.available_routers[router_id].calculate_coverage(self.building)
+    
+    def _revert_move(self, router_id, old_pos, new_pos):
+        """Cofa ruch: przywraca router na stare miejsce."""
+        self.current_solution[new_pos] = -1
+        self.current_solution[old_pos] = router_id
+        
+        # Przestaw router z powrotem fizycznie
+        old_point = self.building.router_possible[old_pos]
+        self.available_routers[router_id].position = old_point
+        self.available_routers[router_id].calculate_coverage(self.building)
 
-        aspiration_criteria_counter = 0
+    def run(self) -> Tuple[List[int], float, dict, int]:
+        """Główna pętla algorytmu."""
+        
+        # Start (jeśli nie wywołano wcześniej init)
+        if self.current_solution is None:
+            self.weighted_random_initial_solution()
+            
+        print(f"Start Value: {self.best_value:.2f}")
+
+        aspiration_cnt = 0
+        
+        # Główna pętla
         for iteration in range(self.max_iterations):
-            # Generuj sąsiada
-            neighbor = self.smart_local_change()
             
-            # Oceń sąsiada
-            neighbor_value = self.evaluate_solution()
+            move = self.smart_local_change()
+            if move is None:
+                continue
+                
+            r_id, old_p, new_p = move
             
-            # Sprawdź czy jest w tabu
-            is_tabu = neighbor in self.tabu_list
+            # wykonanie ruchu
+            self._apply_move(r_id, old_p, new_p)
+            current_val = self.evaluate_solution()
             
-            # Oceń czy zaakceptować (nie w tabu ALBO spełnia aspirację)
+            # sprawdzenie w tabu
+            solution_signature = tuple(self.current_solution) # Krotka jest hashowalna
+            is_tabu = solution_signature in self.tabu_list
+            
+            # ocena rozwiązania
             accept = False
             if not is_tabu:
                 accept = True
-            elif self.aspiration_criteria(neighbor):
-                aspiration_criteria_counter += 1
+            elif current_val > self.best_value:
+                # TODO: Inne kryterium aspiracji dodać
                 accept = True
+                aspiration_cnt += 1
             
             if accept:
-                # Dodaj do tabu listy
-                self.tabu_list.append(neighbor.copy())
+                #ruch przyjęty
+                self.tabu_list.append(solution_signature)
                 if len(self.tabu_list) > self.tabu_length:
                     self.tabu_list.pop(0)
                 
-                # Aktualizuj najlepsze rozwiązanie
-                if neighbor_value > self.best_value:
-                    self.best_solution = neighbor.copy()
-                    self.best_value = neighbor_value
+                # zmiana najlepszego rozwiązania
+                if current_val > self.best_value:
+                    self.best_solution = list(self.current_solution)
+                    self.best_value = current_val
             else:
-                # Cofnij zmianę (przywróć poprzednie rozwiązanie)
-                # Trzeba znaleźć router który się zmienił i cofnąć
-                for i in range(len(self.current_solution)):
-                    if self.current_solution[i] != neighbor[i]:
-                        # Znaleziony zmieniony router
-                        router_id = self.current_solution[i]
-                        if router_id >= 0:
-                            # Przywróć starą pozycję
-                            for j in range(len(self.current_solution)):
-                                if neighbor[j] == router_id and i != j:
-                                    self.available_routers[router_id].position = self.building.router_possible[i]
-                                    self.available_routers[router_id].calculate_coverage(self.building)
-                                    break
-                        break
-                self.current_solution = self.best_solution.copy()
-            
-            # Zapisz historię
-            self.history['iterations'].append(iteration + 1)
+                # ruch odrzucony
+                # cofanie zmiany
+                self._revert_move(r_id, old_p, new_p)
+                
+                # przywrócenie current_value do wykresików
+                if self.history['current_values']:
+                    current_val = self.history['current_values'][-1]
+                else:
+                    current_val = self.best_value
+
+            # Logowanie
+            self.history['iterations'].append(iteration)
             self.history['best_values'].append(self.best_value)
-            self.history['current_values'].append(neighbor_value)
+            self.history['current_values'].append(current_val)
+
+        # ustawienie rozwiązania na najlepsze
+        self.current_solution = list(self.best_solution)
+        
+        # Reset i ustawienie
+        for r in self.available_routers:
+            r.position = None
+            r.coverage_grid = None
             
-        #     if (iteration + 1) % 10 == 0:
-        #         print(f"Iteracja {iteration + 1}/{self.max_iterations}, Best: {self.best_value:.2f}")
-        
-        # print(f"\n=== Koniec ===")
-        # print(f"Najlepsza wartość: {self.best_value:.2f}")
-        
-        return self.best_solution, self.best_value, self.history, aspiration_criteria_counter
-        
+        for pos_idx, r_id in enumerate(self.best_solution):
+            if r_id != -1:
+                pt = self.building.router_possible[pos_idx]
+                self.available_routers[r_id].position = pt
+                self.available_routers[r_id].calculate_coverage(self.building)
+
+        return self.best_solution, self.best_value, self.history, aspiration_cnt
     

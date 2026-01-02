@@ -77,7 +77,8 @@ class Building:
             self.__get_points_to_calculate()
         )  # od razu buduje liste punktów do obliczenia zasięgu dla łatwiejszego dostępu
         self.Floor_heights = Floor_heights
-
+        self.available_routers = available_routers
+        
     def __get_possible_router_positions(self) -> List:
         """
         Zwraca listę krotek (x, y, Floor_number) z możliwymi pozycjami routerów w całym budynku
@@ -443,6 +444,67 @@ class Building:
 
         return global_map
 
+    def calculate_router_usefulness(self) -> List[float]:
+        """
+        Oblicza "przydatność" każdego routera z listy self.available_routers.
+        Przydatność = Suma (Siła Sygnału * Waga Pokrycia) w zasięgu routera.
+        
+        Returns:
+            List[float]: Lista wyników punktowych dla każdego routera (indeksy zgodne z listą routerów).
+        """
+        scores = []
+        
+        for router in self.available_routers:
+            # 1. Jeśli router nie jest ustawiony, jego użyteczność to 0
+            if router.position is None or router.coverage_grid is None:
+                scores.append(0.0)
+                continue
+                
+            # 2. Pobieramy piętro, na którym jest router
+            floor_idx = router.position.Floor_number
+            # Zabezpieczenie, gdyby router miał złe piętro
+            if floor_idx >= len(self.Floor_list):
+                scores.append(0.0)
+                continue
+                
+            pietro = self.Floor_list[floor_idx]
+            
+            # Wymiary mapy budynku (piętra)
+            H_map, W_map = pietro.cover.shape
+            
+            # Wymiary małej kratki routera
+            local_grid = router.coverage_grid
+            start_row, start_col = router.grid_corner # Lewy górny róg na mapie globalnej
+            h_local, w_local = local_grid.shape
+            
+            # Zakresy na mapie głównej (ograniczone wymiarami piętra)
+            global_r_start = max(0, start_row)
+            global_r_end = min(H_map, start_row + h_local)
+            global_c_start = max(0, start_col)
+            global_c_end = min(W_map, start_col + w_local)
+            
+            # Jeśli router jest całkowicie poza mapą (teoretycznie niemożliwe, ale bezpieczne)
+            if global_r_start >= global_r_end or global_c_start >= global_c_end:
+                scores.append(0.0)
+                continue
+                
+            # Przeliczamy te zakresy na współrzędne wewnątrz małej kratki routera
+            local_r_start = global_r_start - start_row
+            local_r_end = local_r_start + (global_r_end - global_r_start)
+            local_c_start = global_c_start - start_col
+            local_c_end = local_c_start + (global_c_end - global_c_start)
+            
+            # Wycinamy odpowiednie fragmenty
+            cover_slice = pietro.cover[global_r_start:global_r_end, global_c_start:global_c_end]
+            signal_slice = local_grid[local_r_start:local_r_end, local_c_start:local_c_end]
+            
+            # Mnożymy element po elemencie (Waga * Sygnał) i sumujemy wszystko
+            # To daje jedną liczbę określającą, jak bardzo ten router jest potrzebny
+            score = np.sum(cover_slice * signal_slice)
+            
+            scores.append(float(score))
+            
+        return scores
 
 class Router:
     def __init__(self, Power: float, Max_users: int, Max_range: int):
@@ -479,233 +541,11 @@ class Router:
         for i in range(self.max_range):
             for j in range(self.max_range):
                 if (left_upper_x + i, left_upper_y + j) != (self.position.x, self.position.y):
-                    local_router_square[i, j] = 10**(building.goal_function_point(Point(left_upper_x + i, left_upper_y + j, 0), self.position, 2)/10)
+                    local_router_square[i, j] = 10**(building.goal_function_point(Point(left_upper_x + i, left_upper_y + j, 0), self.position, self.power)/10)
                 else:
-                    local_router_square[i, j] = 3 #WARTOŚĆ SYGNAŁU W MIEJSCU RUTERA
+                    local_router_square[i, j] = 10**(self.power/10) #WARTOŚĆ SYGNAŁU W MIEJSCU RUTERA
         
         self.coverage_grid = local_router_square
         self.grid_corner = (left_upper_x, left_upper_y)
-        
-        
-class TabuSearch:
-    """
-    Algorytm Tabu Search dla optymalizacji rozmieszczenia routerów w budynku.
-    """
-
-    def __init__(
-        self,
-        building: Building,
-        available_routers: List[Router],
-        tabu_length: int = 10,
-        max_iterations: int = 100,
-    ):
-        """
-        Args:
-            building: obiekt budynku z piętrami i możliwymi pozycjami routerów
-            available_routers: lista dostępnych routerów do rozmieszczenia
-            tabu_length: długość listy tabu
-            max_iterations: maksymalna liczba iteracji
-        """
-        self.building = building
-        self.available_routers = available_routers
-        self.tabu_length = tabu_length
-        self.max_iterations = max_iterations
-        
-        # Stan algorytmu
-        self.tabu_list = []
-        self.current_solution = None
-        self.best_solution = None
-        self.best_value = float('-inf')
-        
-        # Historia dla analizy/wykresów
-        self.history = {
-            'iterations': [],
-            'best_values': [],
-            'current_values': []
-        }
-        
-    def initial_solution(self):
-        """
-        funkcja generująca początkowe rozwiązanie dla tabu search (np. losowe)
-            [(1, 1, 1), (6, 1, 1), (6, 6, 1)] - możliwe pozycje dla ruterów
-            [0, 1, -1] - na pozycji (1,1,1) - ruter0, na pozycji (6,1,1) - ruter1, na pozycji (6,6,1) - brak rutera
-        """
-
-        num_possible_positions = len(self.building.router_possible)
-        num_available_routers = len(self.available_routers)
-
-        # Inicjalizacja rozwiązania z samymi zerami
-        solution = [-1] * num_possible_positions
-
-        # Losowe rozmieszczenie ruterów
-        chosen_positions = np.random.choice(
-            num_possible_positions, num_available_routers, replace=False
-        )
-        router_num = 0
-        for pos in chosen_positions:
-            solution[pos] = router_num  # Oznaczamy miejsce jako zajęte przez ruter
-            self.available_routers[router_num].position = self.building.router_possible[pos] # Przypisuje dp rutera jego pozycję
-            self.available_routers[router_num].calculate_coverage(self.building) #Oblicza kratkę od rutera, przy rozwiązaniu początkowym
-            router_num += 1
-        
-
-        self.current_solution = solution
     
-    def evaluate_solution(self) -> float:
-        """
-        Oblicza wartość funkcji celu dla bieżącego rozwiązania.
-        
-        Kroki:
-        1. Użyć agregation_func do stworzenia globalnej mapy zasięgu
-        2. Obliczyć wartość funkcji celu (suma iloczynów zasięgu i wag cover)
-        
-        Returns:
-            wartość funkcji celu
-        """
-        # Agreguj zasięgi wszystkich routerów
-        ranges_matrix = self.building.agregation_func(self.available_routers)
-        
-        # Oblicz funkcję celu: suma iloczynów zasięgu * wagi cover
-        pietro = self.building.Floor_list[0]
-        goal_value = np.sum(pietro.cover * ranges_matrix)
-        
-        return goal_value
-    
-    def aspiration_criteria(self, neighbor_solution: List[int]) -> bool:
-        """
-        Kryterium aspiracji - pozwala na ruch tabu jeśli jest lepszy od najlepszego.
-        
-        Args:
-            neighbor_solution: rozwiązanie sąsiednie do oceny (lista indeksów routerów)
             
-        Returns:
-            True jeśli neighbor jest lepszy od best_value (pozwól na ruch mimo tabu)
-        """
-        # Tymczasowo ustaw pozycje routerów zgodnie z neighbor_solution
-        old_positions = [r.position for r in self.available_routers]
-        
-        # Ustaw nowe pozycje i przelicz coverage
-        for i, router_idx in enumerate(neighbor_solution):
-            if router_idx >= 0:  # Router przypisany do tej pozycji
-                self.available_routers[router_idx].position = self.building.router_possible[i]
-                self.available_routers[router_idx].calculate_coverage(self.building)
-        
-        # Oceń rozwiązanie
-        neighbor_value = self.evaluate_solution()
-        
-        # Przywróć stare pozycje
-        for i, router in enumerate(self.available_routers):
-            router.position = old_positions[i]
-            if old_positions[i] is not None:
-                router.calculate_coverage(self.building)
-        
-        return neighbor_value > self.best_value
-    
-    def local_change(self):
-        """
-        Przesuwa jeden losowy router na losową wolną pozycję.
-        Aktualizuje router.position, przelicza coverage i przypisuje do self.current_solution.
-        
-        Returns:
-            Nowe rozwiązanie z jednym routerem w nowej pozycji.
-        """
-        num_possible = len(self.current_solution)
-        # Znajdź pozycje z routerami (wartość >= 0)
-        router_positions = [i for i, val in enumerate(self.current_solution) if val >= 0]
-        
-        if not router_positions:
-            return self.current_solution.copy()
-        
-        # Losowy router do przesunięcia
-        pos = np.random.choice(router_positions)
-        router_id = self.current_solution[pos]
-        
-        # Znajdź wolne pozycje (wartość == -1)
-        free_positions = [i for i in range(num_possible) if self.current_solution[i] == -1]
-        if not free_positions:
-            return self.current_solution.copy()
-        
-        neighbor_pos = np.random.choice(free_positions)
-        
-        new_solution = self.current_solution.copy()
-        new_solution[pos] = -1  # Stara pozycja staje się wolna
-        new_solution[neighbor_pos] = router_id  # Nowa pozycja dostaje routera
-        
-        # Zaktualizuj pozycję routera
-        self.available_routers[router_id].position = self.building.router_possible[neighbor_pos]
-        
-        # Przelicz kratkę zasięgu dla zmienionego routera
-        self.available_routers[router_id].calculate_coverage(self.building)
-        
-        # Przypisz nowe rozwiązanie do current_solution
-        self.current_solution = new_solution
-        return new_solution
-    
-    def run(self) -> Tuple[List[int], float, dict]:
-        """
-        Uruchamia algorytm Tabu Search.
-        
-        Returns:
-            (best_solution, best_value, history)
-        """
-        # print("=== Start Tabu Search ===")
-        self.initial_solution()
-        
-        for iteration in range(self.max_iterations):
-            # Generuj sąsiada
-            neighbor = self.local_change()
-            
-            # Oceń sąsiada
-            neighbor_value = self.evaluate_solution()
-            
-            # Sprawdź czy jest w tabu
-            is_tabu = neighbor in self.tabu_list
-            
-            # Oceń czy zaakceptować (nie w tabu ALBO spełnia aspirację)
-            accept = False
-            if not is_tabu:
-                accept = True
-            elif self.aspiration_criteria(neighbor):
-                accept = True
-            
-            if accept:
-                # Dodaj do tabu listy
-                self.tabu_list.append(neighbor.copy())
-                if len(self.tabu_list) > self.tabu_length:
-                    self.tabu_list.pop(0)
-                
-                # Aktualizuj najlepsze rozwiązanie
-                if neighbor_value > self.best_value:
-                    self.best_solution = neighbor.copy()
-                    self.best_value = neighbor_value
-            else:
-                # Cofnij zmianę (przywróć poprzednie rozwiązanie)
-                # Trzeba znaleźć router który się zmienił i cofnąć
-                for i in range(len(self.current_solution)):
-                    if self.current_solution[i] != neighbor[i]:
-                        # Znaleziony zmieniony router
-                        router_id = self.current_solution[i]
-                        if router_id >= 0:
-                            # Przywróć starą pozycję
-                            for j in range(len(self.current_solution)):
-                                if neighbor[j] == router_id and i != j:
-                                    self.available_routers[router_id].position = self.building.router_possible[i]
-                                    self.available_routers[router_id].calculate_coverage(self.building)
-                                    break
-                        break
-                self.current_solution = self.best_solution.copy()
-            
-            # Zapisz historię
-            self.history['iterations'].append(iteration + 1)
-            self.history['best_values'].append(self.best_value)
-            self.history['current_values'].append(neighbor_value)
-            
-        #     if (iteration + 1) % 10 == 0:
-        #         print(f"Iteracja {iteration + 1}/{self.max_iterations}, Best: {self.best_value:.2f}")
-        
-        # print(f"\n=== Koniec ===")
-        # print(f"Najlepsza wartość: {self.best_value:.2f}")
-        
-        return self.best_solution, self.best_value, self.history
-        
-    

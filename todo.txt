@@ -33,3 +33,7 @@ Do sprawdzenia:
 - jakieś parametry algosa
 -- ilość iteracji
 -- itd
+
+
+----------------- EWENTUALNE POPRAWY DZIAŁANIA ----------------
+zmiana obliczania local_change -> wyliczanie w tej funkcji danych dla rutera sprawia ze potem w run trzeba w elsie szukać starego rozwiązania, lepiej robić w run snapshot starego

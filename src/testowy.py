@@ -1,6 +1,6 @@
 import numpy as np
 import data_matrices
-import functions
+import algorithms
 
 
 
@@ -86,4 +86,6 @@ ruter3.calculate_coverage(building=budynek)
 
 global_map = budynek.agregation_func_for_floor(floor_idx=0, routers=[ruter1, ruter2, ruter3])
 
-print(global_map)
+tabu = algorithms.TabuSearch(available_routers=[ruter1, ruter2, ruter3], building=budynek, max_iterations=500)
+tabu.initial_solution()
+print(tabu.evaluate_solution())

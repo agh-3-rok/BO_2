@@ -134,6 +134,7 @@ class TabuSearch:
         Kroki:
         1. Użyć agregation_func do stworzenia globalnej mapy zasięgu
         2. Obliczyć wartość funkcji celu (suma iloczynów zasięgu i wag cover)
+        3. I tak dla każdego piętra
         
         Returns:
             wartość funkcji celu

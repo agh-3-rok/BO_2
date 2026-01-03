@@ -1,13 +1,9 @@
-# tutaj wstawiam kilka danych
 from __future__ import annotations # To rozwiązuje problem kolejności klas
 import numpy as np
-from typing import List, Tuple
+from typing import List
 from math import floor
 
 FLOOR_DAMPING_PARAM = 2.0  #przykładowa wartość tłumienia podłogi między piętrami
-FLOOR_HEIGHT = 3
-TABU_LIST_LENGTH = 10  # przykładowa długość tabu listy
-MAX_ITERATIONS = 100  # przykładowa maksymalna liczba iteracji tabu search
 
 
 class Point:
@@ -468,12 +464,12 @@ class Building:
         scores = []
         
         for router in self.available_routers:
-            # 1. Jeśli router nie jest ustawiony, jego użyteczność to 0
+            # Jeśli router nie jest ustawiony, jego użyteczność to 0
             if router.position is None or router.coverage_grid is None:
                 scores.append(0.0)
                 continue
                 
-            # 2. Pobieramy piętro, na którym jest router
+            # Pobieramy piętro, na którym jest router
             floor_idx = router.position.Floor_number
             # Zabezpieczenie, gdyby router miał złe piętro
             if floor_idx >= len(self.Floor_list):
@@ -486,7 +482,7 @@ class Building:
             H_map, W_map = pietro.cover.shape
             
             # Wymiary małej kratki routera
-            local_grid = router.coverage_grid
+            local_grid = router.coverage_layers[0]
             start_row, start_col = router.grid_corner # Lewy górny róg na mapie globalnej
             h_local, w_local = local_grid.shape
             
@@ -518,6 +514,7 @@ class Building:
             scores.append(float(score))
             
         return scores
+
 
 class Router:
     def __init__(self, Power: float, Max_users: int, Max_range: int):

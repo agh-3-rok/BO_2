@@ -134,48 +134,22 @@ class TabuSearch:
         Kroki:
         1. Użyć agregation_func do stworzenia globalnej mapy zasięgu
         2. Obliczyć wartość funkcji celu (suma iloczynów zasięgu i wag cover)
+        3. I tak dla każdego piętra
         
         Returns:
             wartość funkcji celu
         """
-        # Agreguj zasięgi wszystkich routerów
-        ranges_matrix = self.building.agregation_func(self.available_routers)
-        
-        # Oblicz funkcję celu: suma iloczynów zasięgu * wagi cover
-        pietro = self.building.Floor_list[0]
-        goal_value = np.sum(pietro.cover * ranges_matrix)
-        
-        return goal_value
-    
-    def aspiration_criteria(self, neighbor_solution: List[int]) -> bool:
-        """
-        Kryterium aspiracji - pozwala na ruch tabu jeśli jest lepszy od najlepszego.
-        
-        Args:
-            neighbor_solution: rozwiązanie sąsiednie do oceny (lista indeksów routerów)
+        goal_value = 0
+        for floor_idx in range(len(self.building.Floor_list)):
             
-        Returns:
-            True jeśli neighbor jest lepszy od best_value (pozwól na ruch mimo tabu)
-        """
-        # Tymczasowo ustaw pozycje routerów zgodnie z neighbor_solution
-        old_positions = [r.position for r in self.available_routers]
+        # agreguj zasięgi wszystkich routerów dla danego piętra
+            map_of_signal_for_floor = self.building.agregation_func_for_floor(floor_idx, self.available_routers)
         
-        # Ustaw nowe pozycje i przelicz coverage
-        for i, router_idx in enumerate(neighbor_solution):
-            if router_idx >= 0:  # Router przypisany do tej pozycji
-                self.available_routers[router_idx].position = self.building.router_possible[i]
-                self.available_routers[router_idx].calculate_coverage(self.building)
-        
-        # Oceń rozwiązanie
-        neighbor_value = self.evaluate_solution()
-        
-        # Przywróć stare pozycje
-        for i, router in enumerate(self.available_routers):
-            router.position = old_positions[i]
-            if old_positions[i] is not None:
-                router.calculate_coverage(self.building)
-        
-        return neighbor_value > self.best_value
+            # Oblicz funkcję celu: suma iloczynów zasięgu * wagi cover
+            pietro = self.building.Floor_list[floor_idx]
+            goal_value += np.sum(pietro.cover * map_of_signal_for_floor)
+            
+        return goal_value
     
     def local_change(self):
         """
@@ -336,7 +310,7 @@ class TabuSearch:
     
             
             # sprawdzenie w tabu - NOWA LOGIKA TABU bo nie dzialalo kryterium aspiracji
-            # Sprawdzamy: Czy ten router był niedawno ruszany?
+            # Sprawdzamy czy ten router był niedawno ruszany?
             is_tabu = r_id in self.tabu_list
             
             # ocena rozwiązania
@@ -345,7 +319,6 @@ class TabuSearch:
             if not is_tabu:
                 accept = True
             elif current_val > self.best_value:
-                # TODO: Inne kryterium aspiracji dodać ewentualnie?
                 accept = True
                 aspiration_cnt += 1
             

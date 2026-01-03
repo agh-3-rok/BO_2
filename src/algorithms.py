@@ -346,6 +346,9 @@ class TabuSearch:
                 
             r_id, old_p, new_p = move
             
+            # pobieramy stary wynik routera (potrzebne do LOCAL_GAIN)
+            old_router_score = self._get_single_router_score(r_id)
+            
             #sprawdzenie czy nie wrzuciło rutera obok innego, jeśli tak to w ogole pomija możliwośc
             if not self._is_location_safe_for_router(r_id, new_p):
                 if self.history['current_values']:
@@ -356,8 +359,8 @@ class TabuSearch:
             
             # wykonanie ruchu
             self._apply_move(r_id, old_p, new_p)
-            current_val = self.evaluate_solution()
-    
+            current_total_val = self.evaluate_solution()
+            new_router_score = self._get_single_router_score(r_id) # Nowy wynik routera
             
             # sprawdzenie w tabu: dwie możliwe logiki
             is_tabu = False
@@ -388,10 +391,11 @@ class TabuSearch:
             
             if not is_tabu:
                 accept = True
-            elif current_val > self.best_value:
+            else:
                 # Kryterium Aspiracji
-                accept = True
-                aspiration_cnt += 1
+                if self._check_aspiration(current_total_val, old_router_score, new_router_score):
+                    accept = True
+                    aspiration_cnt += 1
             
             if accept:
                 # akutalizacja listy tabu w zależności od strategii

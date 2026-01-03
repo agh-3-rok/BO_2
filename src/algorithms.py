@@ -24,7 +24,8 @@ class TabuSearch:
         tabu_length: int = 10,
         max_iterations: int = 100,
         min_distance: float = 4.0,
-        strategy: TabuStrategy = TabuStrategy.BLOCK_ROUTER_ID
+        tabu_strategy: TabuStrategy = TabuStrategy.BLOCK_ROUTER_ID,
+        aspiration_strategy: AspirationStrategy = AspirationStrategy.LOCAL_GAIN
     ):
         """
         Args:
@@ -40,7 +41,8 @@ class TabuSearch:
         self.tabu_length = tabu_length
         self.max_iterations = max_iterations
         self.min_distance = min_distance
-        self.strategy = strategy
+        self.tabu_strategy = tabu_strategy
+        self.aspiration_strategy = aspiration_strategy
         
         # Stan algorytmu
         
@@ -292,6 +294,37 @@ class TabuSearch:
                     return False # Kolizja z innym routerem!
             
             return True # Miejsce jest czyste
+    
+    def _get_single_router_score(self, router_idx: int) -> float:
+        """Liczy wynik użyteczności tylko dla jednego routera"""
+        scores = self.building.calculate_router_usefulness()
+        return scores[router_idx] if router_idx < len(scores) else 0.0
+
+    def _check_aspiration(self, current_total_val: float, old_router_score: float, new_router_score: float) -> bool:
+        """
+        Sprawdza kryterium aspiracji
+        """
+        # sprawdzamy globalny wynik
+        if current_total_val > self.best_value:
+            return True
+
+        # jeśli wybrano strategię LOCAL_GAIN sprawdzaa dodatkowe warunki
+        if self.aspiration_strategy == AspirationStrategy.LOCAL_GAIN:
+            
+            # parametr o ile % musi być lepiej (1.3 = 30% poprawy)
+            THRESHOLD = 1.3 
+            # parametr który mówi jak musi się poprawić ruter który wcześniej był bezużyteczny
+            THRESHOLD_USABILITY = 50
+            
+            # router był użyteczny i zyskał 30%
+            if old_router_score > 0 and new_router_score > (old_router_score * THRESHOLD):
+                return True
+                
+            # router był bezużyteczny a teraz działa sensownie
+            if old_router_score == 0 and new_router_score > THRESHOLD_USABILITY:
+                return True
+                
+        return False
     
     def run(self) -> Tuple[List[int], float, dict, int]:
         """Główna pętla algorytmu."""

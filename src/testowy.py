@@ -1,27 +1,25 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import pandas as pd # Opcjonalnie do ładnej tabelki, ale użyjemy printa jeśli nie masz pandas
 from data_matrices import Building, Floor, Router
-from algorithms import TabuSearch, TabuStrategy, AspirationStrategy
+from algorithms import TabuSearch, TabuStrategy, AspirationStrategy, InitialSolutionStrategy, LocalChangeStrategy
 
 # --- KONFIGURACJA TESTU ---
-NUM_RUNS = 30           # Ile razy powtórzyć każdy test (im więcej tym rzetelniej)
-MAX_ITER = 100          # Liczba iteracji w jednym przebiegu
+NUM_RUNS = 20           # Liczba powtórzeń
+MAX_ITER = 100          
 MAP_SIZE = 30
 NUM_ROUTERS = 5
 ROUTER_RANGE = 10
 
 def create_environment():
-    """Tworzy czyste środowisko testowe (2 piętra)."""
+    """Tworzy środowisko testowe (2 piętra)."""
     floors = []
     for f in range(2):
         wall = np.zeros((MAP_SIZE, MAP_SIZE))
-        # Proste ściany
         wall[10:20, 10:20] = 5.0 
         
         cover = np.zeros((MAP_SIZE, MAP_SIZE), dtype=int)
-        if f == 0: cover.fill(5)   # Parter niski priorytet
-        else:      cover.fill(50)  # Piętro wysoki priorytet
+        if f == 0: cover.fill(5)   
+        else:      cover.fill(50)  
         
         router_matrix = np.ones((MAP_SIZE, MAP_SIZE), dtype=int)
         floors.append(Floor(wall, router_matrix, cover, f, 0.5))
@@ -32,108 +30,84 @@ def create_environment():
     return building, routers
 
 def run_benchmark():
-    # Definicja scenariuszy do porównania
+    # Definicja scenariuszy wykorzystująca NOWE strategie
     scenarios = [
         {
-            "name": "1. Classic",
-            "tabu": TabuStrategy.BLOCK_ROUTER_ID,
-            "asp": AspirationStrategy.GLOBAL_BEST,
-            "color": "gray"
+            "name": "1. Blind Random",
+            "tabu_strat": TabuStrategy.BLOCK_ROUTER_ID,
+            "asp_strat": AspirationStrategy.GLOBAL_BEST,
+            "init_strat": InitialSolutionStrategy.RANDOM_INITIALIZATION,
+            "move_strat": LocalChangeStrategy.RANDOM_LOCAL_CHANGE,
+            "color": "red"
         },
         {
-            "name": "2. Spatial Tabu",
-            "tabu": TabuStrategy.BLOCK_AREA_RADIUS,
-            "asp": AspirationStrategy.GLOBAL_BEST,
-            "color": "blue"
+            "name": "2. Smart Start Only",
+            "tabu_strat": TabuStrategy.BLOCK_ROUTER_ID,
+            "asp_strat": AspirationStrategy.GLOBAL_BEST,
+            "init_strat": InitialSolutionStrategy.WEIGHTED_RANDOM_INITIALIZATION,
+            "move_strat": LocalChangeStrategy.RANDOM_LOCAL_CHANGE, # Ruchy nadal losowe
+            "color": "orange"
         },
         {
-            "name": "3. Full Modern",
-            "tabu": TabuStrategy.BLOCK_AREA_RADIUS,
-            "asp": AspirationStrategy.LOCAL_GAIN,
+            "name": "3. Full Smart (Classic)",
+            "tabu_strat": TabuStrategy.BLOCK_ROUTER_ID,
+            "asp_strat": AspirationStrategy.GLOBAL_BEST,
+            "init_strat": InitialSolutionStrategy.WEIGHTED_RANDOM_INITIALIZATION,
+            "move_strat": LocalChangeStrategy.SMART_LOCAL_CHANGE, # Ruchy celowane w najgorsze routery
             "color": "green"
         }
     ]
 
-    results_data = {s["name"]: {"scores": [], "aspirations": []} for s in scenarios}
+    results_data = {s["name"]: {"scores": []} for s in scenarios}
 
-    print(f"Rozpoczynam benchmark: {NUM_RUNS} uruchomień dla każdego z {len(scenarios)} scenariuszy...")
+    print(f"Rozpoczynam benchmark ({NUM_RUNS} prób)...")
     print("=" * 70)
 
-    for s_idx, scenario in enumerate(scenarios):
-        print(f"Testowanie: {scenario['name']}...", end="", flush=True)
+    for s_idx, sc in enumerate(scenarios):
+        print(f"Test: {sc['name']}...", end="", flush=True)
         
         for i in range(NUM_RUNS):
-            # 1. Czyste środowisko dla każdego uruchomienia
             building, routers = create_environment()
             
-            # 2. Inicjalizacja
+            # Inicjalizacja z nowymi parametrami
             opt = TabuSearch(
                 building=building,
                 available_routers=routers,
-                tabu_length=15,
+                tabu_length=10,
                 max_iterations=MAX_ITER,
                 min_distance=3.0,
-                tabu_strategy=scenario['tabu'],
-                aspiration_strategy=scenario['asp']
+                tabu_strategy=sc['tabu_strat'],
+                aspiration_strategy=sc['asp_strat'],
+                init_strategy=sc['init_strat'],        # <--- Wybór inicjalizacji
+                local_change_strategy=sc['move_strat'] # <--- Wybór ruchu
             )
             
-            # 3. Uruchomienie (bez printów w środku run() żeby nie śmiecić)
-            # Warto zakomentować printy w optimizer.py na czas benchmarku!
-            opt.weighted_random_initial_solution() # Start
-            # Reset flagi rozwiązania startowego wewnątrz, symulacja czystego startu
-            opt.current_solution = list(opt.best_solution)
+            # Uruchomienie (run sam wywoła odpowiedni init wewnątrz)
+            opt.run()
             
-            # Run
-            _, best_val, _, asp_cnt = opt.run()
+            results_data[sc["name"]]["scores"].append(opt.best_value)
             
-            # Zbieranie danych
-            results_data[scenario["name"]]["scores"].append(best_val)
-            results_data[scenario["name"]]["aspirations"].append(asp_cnt)
-            
-            # Kropka postępu
             if i % 5 == 0: print(".", end="", flush=True)
             
         print(" Gotowe!")
 
-    # --- RAPORT ---
-    print("\n" + "=" * 70)
-    print(f"{'SCENARIO':<20} | {'AVG SCORE':<10} | {'MAX SCORE':<10} | {'AVG ASPIRATIONS'}")
-    print("-" * 70)
+    # --- WYKRES ---
+    fig, ax1 = plt.subplots(figsize=(10, 6))
     
-    for name, data in results_data.items():
-        avg_score = np.mean(data["scores"])
-        max_score = np.max(data["scores"])
-        avg_asp = np.mean(data["aspirations"])
-        print(f"{name:<20} | {avg_score:<10.1f} | {max_score:<10.1f} | {avg_asp:.2f}")
-
-    # --- WYKRESY ---
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
-    
-    # 1. Boxplot wyników (Pokazuje stabilność i jakość)
     score_lists = [results_data[s["name"]]["scores"] for s in scenarios]
     names = [s["name"] for s in scenarios]
     colors = [s["color"] for s in scenarios]
     
     bplot = ax1.boxplot(score_lists, patch_artist=True, labels=names)
     
-    # Kolorowanie boxplota
     for patch, color in zip(bplot['boxes'], colors):
         patch.set_facecolor(color)
         patch.set_alpha(0.6)
         
-    ax1.set_title(f"Rozkład Wyników (Score) - {NUM_RUNS} prób")
-    ax1.set_ylabel("Funkcja Celu (Im więcej tym lepiej)")
+    ax1.set_title(f"Wpływ Strategii Inicjalizacji i Ruchu na Wynik")
+    ax1.set_ylabel("Funkcja Celu")
     ax1.grid(True, linestyle='--', alpha=0.7)
-
-    # 2. Barplot aspiracji (Pokazuje czy mechanizm działa)
-    avg_asps = [np.mean(results_data[s["name"]]["aspirations"]) for s in scenarios]
-    bars = ax2.bar(names, avg_asps, color=colors, alpha=0.7)
     
-    ax2.set_title("Średnia liczba użyć Kryterium Aspiracji")
-    ax2.set_ylabel("Liczba zaakceptowanych ruchów Tabu")
-    ax2.bar_label(bars, fmt='%.2f')
-    
-    plt.tight_layout()
     plt.show()
 
 if __name__ == "__main__":

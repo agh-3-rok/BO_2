@@ -21,6 +21,16 @@ class TabuStrategy(Enum):
 class AspirationStrategy(Enum):
     GLOBAL_BEST = 1          # Akceptuj tylko jeśli pobijesz najlepszy wynik
     LOCAL_GAIN = 2           # Akceptuj jeśli pobijesz najlepszy wynik lub jeśli router drastycznie zyskał
+    
+class InitialSolutionStrategy(Enum):
+    RANDOM_INITIALIZATION = 1               # Ta metoda inicjalizacji rozrzuca rutery w losowe miejsca na mapie
+    WEIGHTED_RANDOM_INITIALIZATION = 2      # Ta inicjalizacja bierze również pod uwagę macierz cover i na jej podstawie losowo rozrzuca rutery 
+# z większym prawdopodobieństwem w miejscach gdzie są one bardziej potrzebne
+
+class LocalChangeStrategy(Enum):
+    RANDOM_LOCAL_CHANGE = 1     # Lokalna zmiana polega na przeniesieniu losowego rutera w dowolne wolne miejsce
+    SMART_LOCAL_CHANGE = 2      # Lokalna zmiana polega na przenoszeniu ruterów, które mają najgorszą użyteczność liczoną przy wykorzystaniu macierzy cover
+    
 
 class TabuSearch:
     """
@@ -35,7 +45,9 @@ class TabuSearch:
         max_iterations: int = 100,
         min_distance: float = 4.0,
         tabu_strategy: TabuStrategy = TabuStrategy.BLOCK_ROUTER_ID,
-        aspiration_strategy: AspirationStrategy = AspirationStrategy.LOCAL_GAIN
+        aspiration_strategy: AspirationStrategy = AspirationStrategy.LOCAL_GAIN,
+        init_strategy: InitialSolutionStrategy = InitialSolutionStrategy.WEIGHTED_RANDOM_INITIALIZATION,
+        local_change_strategy: LocalChangeStrategy = LocalChangeStrategy.SMART_LOCAL_CHANGE
     ):
         """
         Args:
@@ -46,6 +58,8 @@ class TabuSearch:
             min_distance: minimalna odległość między ruterami
             tabu_strategy: strategia w jakis sposób działa lista tabu
             aspiration_strategy: strategia kryterium aspiracji
+            init_strategy: pozwala wybrać jak zostanie zainicjlaizowane rozwiązanie
+            local_change_strategy: pozwala wybrać jak będzie wyglądała lokalna zmiana
         """
         self.building = building
         self.available_routers = available_routers
@@ -54,6 +68,8 @@ class TabuSearch:
         self.min_distance = min_distance
         self.tabu_strategy = tabu_strategy
         self.aspiration_strategy = aspiration_strategy
+        self.init_strategy = init_strategy
+        self.local_change_strategy = local_change_strategy
         
         # Stan algorytmu
         
@@ -136,7 +152,7 @@ class TabuSearch:
         # Reset
         for r in self.available_routers:
             r.position = None
-            r.coverage_grid = None
+            r.coverage_layers = None
         
         # Losujemy N unikalnych pozycji na podstawie wag priorytetów
         # replace=False zapewnia brak duplikatów
@@ -338,7 +354,10 @@ class TabuSearch:
         
         # Start (jeśli nie wywołano wcześniej init)
         if self.current_solution is None:
-            self.weighted_random_initial_solution()
+            if self.init_strategy == InitialSolutionStrategy.WEIGHTED_RANDOM_INITIALIZATION:
+                self.weighted_random_initial_solution()
+            else:
+                self.initial_solution()
 
         aspiration_cnt = 0
         
@@ -347,7 +366,13 @@ class TabuSearch:
         # Główna pętla
         for iteration in range(self.max_iterations):
             
-            move = self.smart_local_change()
+            if self.local_change_strategy == LocalChangeStrategy.SMART_LOCAL_CHANGE:
+                move = self.smart_local_change()
+            elif self.local_change_strategy == LocalChangeStrategy.RANDOM_LOCAL_CHANGE:
+                move = self.local_change()
+            else:
+                move = None
+                
             if move is None:
                 continue
                 

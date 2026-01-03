@@ -2,8 +2,7 @@ from __future__ import annotations # To rozwiązuje problem kolejności klas
 import numpy as np
 from typing import List
 from math import floor
-
-FLOOR_DAMPING_PARAM = 2.0  #przykładowa wartość tłumienia podłogi między piętrami
+from config import SimulationConfig
 
 
 class Point:
@@ -64,7 +63,7 @@ class Building:
     # zawiera listę pięter
 
     def __init__(
-        self, Floors: list[Floor], Floor_heights: int, available_routers: list[Router]
+        self, Floors: list[Floor], Floor_heights: int, available_routers: list[Router], config: SimulationConfig
     ):
         self.Floor_list = Floors
         self.router_possible = (
@@ -75,6 +74,7 @@ class Building:
         )  # od razu buduje liste punktów do obliczenia zasięgu dla łatwiejszego dostępu
         self.Floor_heights = Floor_heights
         self.available_routers = available_routers # TODO co to jest XD?
+        self.config = config
         
     def add_floor(self, floor: Floor):
         self.Floor_list.append(floor)
@@ -381,7 +381,7 @@ class Building:
         if distance == 0:
             raise ValueError("Distance between point and router cannot be zero.")
         
-        damping = self.get_damping(point, router, FLOOR_DAMPING_PARAM)
+        damping = self.get_damping(point, router, self.config.floor_damping)
         
         # Przykładowa formuła na sygnał w dB
         signal_db = - (20 * np.log10(distance) + damping) + router_power

@@ -2,35 +2,8 @@ import numpy as np
 from typing import List, Tuple, Optional, Any
 import random
 from data_matrices import Building, Router
-from enum import Enum
-
-#obszar jaki blokuje się gdy jako tabu wybieramy wlasnie blokowanie obszaru (podaje sie promień obszaru)
-BLOCK_AREA_RADIUS_RANGE = 5
-
-# parametr o ile % musi być lepiej (1.3 = 30% poprawy)
-ASPIRATION_LOCAL_GAIN_THRESHOLD = 1.05 
-
-# parametr który mówi jak musi się poprawić ruter który wcześniej był bezużyteczny
-ASPIRATION_LOCAL_GAIN_USABILITY_THRESHOLD = 50
-
-
-class TabuStrategy(Enum):
-    BLOCK_ROUTER_ID = 1      # Zablokuj konkretny ID routera 
-    BLOCK_AREA_RADIUS = 2    # Zablokuj stare miejsce i jego okolicę 
-
-class AspirationStrategy(Enum):
-    GLOBAL_BEST = 1          # Akceptuj tylko jeśli pobijesz najlepszy wynik
-    LOCAL_GAIN = 2           # Akceptuj jeśli pobijesz najlepszy wynik lub jeśli router drastycznie zyskał
-    
-class InitialSolutionStrategy(Enum):
-    RANDOM_INITIALIZATION = 1               # Ta metoda inicjalizacji rozrzuca rutery w losowe miejsca na mapie
-    WEIGHTED_RANDOM_INITIALIZATION = 2      # Ta inicjalizacja bierze również pod uwagę macierz cover i na jej podstawie losowo rozrzuca rutery 
-# z większym prawdopodobieństwem w miejscach gdzie są one bardziej potrzebne
-
-class LocalChangeStrategy(Enum):
-    RANDOM_LOCAL_CHANGE = 1     # Lokalna zmiana polega na przeniesieniu losowego rutera w dowolne wolne miejsce
-    SMART_LOCAL_CHANGE = 2      # Lokalna zmiana polega na przenoszeniu ruterów, które mają najgorszą użyteczność liczoną przy wykorzystaniu macierzy cover
-    
+from config import SimulationConfig
+from enums import TabuStrategy, AspirationStrategy, InitialSolutionStrategy, LocalChangeStrategy
 
 class TabuSearch:
     """
@@ -41,16 +14,9 @@ class TabuSearch:
         self,
         building: Building,
         available_routers: List[Router],
-        tabu_length: int = 10,
-        max_iterations: int = 100,
-        min_distance: float = 4.0,
-        tabu_strategy: TabuStrategy = TabuStrategy.BLOCK_ROUTER_ID,
-        aspiration_strategy: AspirationStrategy = AspirationStrategy.LOCAL_GAIN,
-        init_strategy: InitialSolutionStrategy = InitialSolutionStrategy.WEIGHTED_RANDOM_INITIALIZATION,
-        local_change_strategy: LocalChangeStrategy = LocalChangeStrategy.SMART_LOCAL_CHANGE
+        config: SimulationConfig
     ):
         """
-        Args:
             building: obiekt budynku z piętrami i możliwymi pozycjami routerów
             available_routers: lista dostępnych routerów do rozmieszczenia
             tabu_length: długość listy tabu
@@ -63,13 +29,16 @@ class TabuSearch:
         """
         self.building = building
         self.available_routers = available_routers
-        self.tabu_length = tabu_length
-        self.max_iterations = max_iterations
-        self.min_distance = min_distance
-        self.tabu_strategy = tabu_strategy
-        self.aspiration_strategy = aspiration_strategy
-        self.init_strategy = init_strategy
-        self.local_change_strategy = local_change_strategy
+        self.config = config #zapamiętujemy configa jako pole klasy
+        
+        #zczytujemy parametry z configa
+        self.tabu_length = config.tabu_length
+        self.max_iterations = config.max_iterations
+        self.min_distance = config.min_distance
+        self.tabu_strategy = config.tabu_strategy
+        self.aspiration_strategy = config.aspiration_strategy
+        self.init_strategy = config.init_strategy
+        self.local_change_strategy = config.local_change_strategy
         
         # Stan algorytmu
         
@@ -340,11 +309,11 @@ class TabuSearch:
         if self.aspiration_strategy == AspirationStrategy.LOCAL_GAIN:
             
             # router był użyteczny i zyskał 30%
-            if old_router_score > 0 and new_router_score > (old_router_score * ASPIRATION_LOCAL_GAIN_THRESHOLD):
+            if old_router_score > 0 and new_router_score > (old_router_score * self.config.aspiration_threshold):
                 return True
                 
             # router był bezużyteczny a teraz działa sensownie
-            if old_router_score == 0 and new_router_score > ASPIRATION_LOCAL_GAIN_USABILITY_THRESHOLD:
+            if old_router_score == 0 and new_router_score > self.config.aspiration_usability_threshold:
                 return True
                 
         return False
@@ -414,7 +383,7 @@ class TabuSearch:
                         # używamy metody do liczenia dystansu poziomego
                         dist = self.building.horizontal_distance(target_point, forbidden_point)
                         
-                        if dist < BLOCK_AREA_RADIUS_RANGE: 
+                        if dist < self.config.block_area_radius: 
                             is_tabu = True
                             break
             

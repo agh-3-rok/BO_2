@@ -519,7 +519,7 @@ class Router:
         self.power = Power
         self.max_users = Max_users
         self.position = None
-        self.coverage_grid = None
+        self.coverage_layers = {}
         self.grid_corner = None
         self.max_range = Max_range
         
@@ -528,32 +528,52 @@ class Router:
 
     def calculate_coverage(self, building: Building):
         """
-        Oblicza zasięg od pojedynczego ruter, w jego istotnym otoczeniu. Wartości oblicza się w dB
+        Oblicza zasięg od pojedynczego ruter, w jego istotnym otoczeniu. Wartości oblicza się w dB. 
+        Teraz liczy dla 3d, czyli będzie zwracać słownik w którym dla klucza np. 0 - zwroci kratke pietra na ktorym jest ruter
+        dla klucza 1 - zwroci kratkę na piętrze o jeden ponad nim, a dla -1 na piętrze poniżej.
         
-        Args:
-            building (dm.Building): budynek
-            router_point (dm.Point): punkt w którym znajduje się ruter
-            R_max (int): threshold dystansu
-        Returns:
-            building_box (np.ndarray) - mała macierz - lokalna mapa zasięgu
-            point (dm.Point) - współrzędne lewego górnego rogu lokalnej macierzy
-        
-        krotka z tych dwóch?
+        Liczbę pięter dla których sie liczy należy ustawić w tej funkcji jako floor_offsets
         """ 
-        local_router_square = np.zeros((self.max_range, self.max_range))
+        
+        self.coverage_layers = {}
+        
+        # tutaj ustawia się dla ilu pięter liczyć, 3 piętra powinny wystarczyc przez silne tlumienie na stropach
+        floor_offsets = [0, -1, 1]
+        
+        # piętro na którym jest ruter
+        current_floor_idx = self.position.Floor_number
+        
         
         #x, y współrzędne lewego górnego rogu 
         left_upper_x = self.position.x - self.max_range // 2
         left_upper_y = self.position.y - self.max_range // 2
         
-        for i in range(self.max_range):
-            for j in range(self.max_range):
-                if (left_upper_x + i, left_upper_y + j) != (self.position.x, self.position.y):
-                    local_router_square[i, j] = 10**(building.goal_function_point(Point(left_upper_x + i, left_upper_y + j, 0), self.position, self.power)/10)
-                else:
-                    local_router_square[i, j] = 10**(self.power/10) #WARTOŚĆ SYGNAŁU W MIEJSCU RUTERA
+        for delta_f in floor_offsets:
+            target_floor_idx = current_floor_idx + delta_f
+            
+            # Sprawdź, czy takie piętro w ogóle istnieje w budynku
+            if target_floor_idx < 0 or target_floor_idx >= len(building.Floor_list):
+                continue
+                
+            # pusta kratka dla danego piętra
+            local_router_square = np.zeros((self.max_range, self.max_range))
         
-        self.coverage_grid = local_router_square
-        self.grid_corner = (left_upper_x, left_upper_y)
-    
+            for i in range(self.max_range):
+                for j in range(self.max_range):
+                    
+                    # punkt na danym piętrze dla którego będziemy liczyć
+                    target_point = Point(left_upper_x + i, left_upper_y + j, target_floor_idx)
+                    
+                    # jeśli jest to punkt w którym stoi ruter to ustawiamy w tym miejscu jego moc
+                    if delta_f == 0 and (left_upper_x + i, left_upper_y + j) == (self.position.x, self.position.y):
+                        val_db = self.power
+                    else:
+                        # obliczanie dla reszty punktów
+                        val_db = building.goal_function_point(target_point, self.position, self.power)
+                    
+                    # konwersja na moc liniową zeby latiwej liczyc agreagacje
+                    local_router_square[i, j] = 10**(val_db / 10.0)
+            
+            # zapis wartswy do slownika
+            self.coverage_layers[delta_f] = local_router_square
             

@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Any
 import random
 from data_matrices import Building, Router
 from enum import Enum
@@ -34,7 +34,8 @@ class TabuSearch:
             tabu_length: długość listy tabu
             max_iterations: maksymalna liczba iteracji
             min_distance: minimalna odległość między ruterami
-            strategy: strategia w jakis sposób działa lista tabu i kryterium aspiracji
+            tabu_strategy: strategia w jakis sposób działa lista tabu
+            aspiration_strategy: strategia kryterium aspiracji
         """
         self.building = building
         self.available_routers = available_routers
@@ -49,7 +50,7 @@ class TabuSearch:
         # Tabu list będzie przechowywać:
         # - dla BLOCK_ROUTER_ID: int (id routera)
         # - dla BLOCK_AREA_RADIUS: Point (punkt, który został zwolniony)
-        self.tabu_list: List[int] = []
+        self.tabu_list: List[Any] = []
         self.current_solution = None
         self.best_solution = None
         self.best_value = float('-inf')
@@ -117,9 +118,8 @@ class TabuSearch:
         return indices, probs
 
     def weighted_random_initial_solution(self):
-        """
-        Losuje pozycje, ale z większym prawdopodobieństwem tam, gdzie waga 'cover' jest duża
-        """
+        """Losuje pozycje, ale z większym prawdopodobieństwem tam, gdzie waga 'cover' jest duża"""
+        
         num_routers = len(self.available_routers)
         indices, probs = self.high_priority_indices
         
@@ -161,7 +161,7 @@ class TabuSearch:
         goal_value = 0
         for floor_idx in range(len(self.building.Floor_list)):
             
-        # agreguj zasięgi wszystkich routerów dla danego piętra
+            # agreguj zasięgi wszystkich routerów dla danego piętra
             map_of_signal_for_floor = self.building.agregation_func_for_floor(floor_idx, self.available_routers)
         
             # Oblicz funkcję celu: suma iloczynów zasięgu * wagi cover
@@ -252,7 +252,8 @@ class TabuSearch:
         return (router_id, old_pos_idx, new_pos_idx)
     
     def _apply_move(self, router_id, old_pos, new_pos):
-        """Wykonuje ruch: aktualizuje tablicę solution oraz fizyczną pozycję routera."""
+        """Wykonuje ruch: aktualizuje tablicę solution oraz fizyczną pozycję routera"""
+        
         self.current_solution[old_pos] = -1
         self.current_solution[new_pos] = router_id
         
@@ -262,7 +263,8 @@ class TabuSearch:
         self.available_routers[router_id].calculate_coverage(self.building)
     
     def _revert_move(self, router_id, old_pos, new_pos):
-        """Cofa ruch: przywraca router na stare miejsce."""
+        """Cofa ruch: przywraca router na stare miejsce"""
+        
         self.current_solution[new_pos] = -1
         self.current_solution[old_pos] = router_id
         
@@ -297,13 +299,13 @@ class TabuSearch:
     
     def _get_single_router_score(self, router_idx: int) -> float:
         """Liczy wynik użyteczności tylko dla jednego routera"""
+        
         scores = self.building.calculate_router_usefulness()
         return scores[router_idx] if router_idx < len(scores) else 0.0
 
     def _check_aspiration(self, current_total_val: float, old_router_score: float, new_router_score: float) -> bool:
-        """
-        Sprawdza kryterium aspiracji
-        """
+        """Sprawdza kryterium aspiracji"""
+        
         # sprawdzamy globalny wynik
         if current_total_val > self.best_value:
             return True
@@ -359,7 +361,7 @@ class TabuSearch:
             
             # wykonanie ruchu
             self._apply_move(r_id, old_p, new_p)
-            current_total_val = self.evaluate_solution()
+            current_val = self.evaluate_solution()
             new_router_score = self._get_single_router_score(r_id) # Nowy wynik routera
             
             # sprawdzenie w tabu: dwie możliwe logiki
@@ -393,7 +395,7 @@ class TabuSearch:
                 accept = True
             else:
                 # Kryterium Aspiracji
-                if self._check_aspiration(current_total_val, old_router_score, new_router_score):
+                if self._check_aspiration(current_val, old_router_score, new_router_score):
                     accept = True
                     aspiration_cnt += 1
             

@@ -7,8 +7,8 @@ from data_matrices import Building, Floor, Router
 from algorithms import TabuSearch 
 from enums import TabuStrategy, AspirationStrategy, InitialSolutionStrategy, LocalChangeStrategy
 
-map_size = 30
-num_runs = 50
+map_size = 300 #rozmiar mapki
+num_runs = 50 #liczba przebiegów
 
 def create_environment(config: SimulationConfig):
     """
@@ -66,24 +66,26 @@ def create_environment(config: SimulationConfig):
 def main():
     # 1. Konfiguracja symulacji
     print(">>> Tworzenie konfiguracji...")
+    
+    
     config = SimulationConfig(
         # Parametry środowiska
-        num_routers=3,
-        router_range=10,
+        num_routers=10,
+        router_range=20,
         floor_damping=2.0,
         
         # Parametry algorytmu
         max_iterations=50,
         tabu_length=10,
-        min_distance=4.0, # Upewnij się, że ten parametr jest w dataclass Config
+        min_distance=4.0,
         
         # Strategie (korzystamy z Enums)
         tabu_strategy=TabuStrategy.BLOCK_ROUTER_ID,
-        aspiration_strategy=AspirationStrategy.LOCAL_GAIN,
+        aspiration_strategy=AspirationStrategy.GLOBAL_BEST,
         init_strategy=InitialSolutionStrategy.WEIGHTED_RANDOM_INITIALIZATION,
         local_change_strategy=LocalChangeStrategy.SMART_LOCAL_CHANGE,
         
-        # Parametry aspiracji
+        # Parametry aspiracji w przypadku gdy używamy LOCAL_GAIN
         aspiration_threshold=1.05,
         aspiration_usability_threshold=50.0,
     )

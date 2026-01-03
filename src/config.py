@@ -15,15 +15,16 @@ class SimulationConfig:
     tabu_length: int = 10
     
     # Parametry specyficzne dla strategii
-    block_area_radius: float = 5.0                  # Promień blokady (dla BLOCK_AREA_RADIUS)
-    aspiration_threshold: float = 1.05              # Wymagana poprawa (np. 1.05 = 5%)
-    aspiration_usability_threshold: float = 50.0    # Próg "od zera do bohatera"
+    block_area_radius: float = 5.0                  # obszar jaki blokuje się gdy jako tabu wybieramy wlasnie blokowanie obszaru (podaje sie promień obszaru)
+    aspiration_threshold: float = 1.05              # parametr o ile % musi być lepiej (1.3 = 30% poprawy)
+    aspiration_usability_threshold: float = 50.0    # parametr który mówi jak musi się poprawić ruter który wcześniej był bezużyteczny
 
     # --- Parametry Środowiska / Budynku ---
     map_size: int = 30
     num_routers: int = 5
     router_range: int = 10
     floor_damping: float = 2.0                  # Tłumienie stropu (fizyka)
+    min_distance: float = 4.0                   # Minimalna odległość między ruterami
     
     # --- Parametry Testu ---
     num_runs: int = 20                          # Ile razy powtórzyć test (do benchmarku)

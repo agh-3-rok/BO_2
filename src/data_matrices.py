@@ -5,6 +5,7 @@ from typing import List, Tuple
 from math import floor
 
 FLOOR_DAMPING_PARAM = 2.0  #przykładowa wartość tłumienia podłogi między piętrami
+FLOOR_HEIGHT = 3
 TABU_LIST_LENGTH = 10  # przykładowa długość tabu listy
 MAX_ITERATIONS = 100  # przykładowa maksymalna liczba iteracji tabu search
 
@@ -77,8 +78,15 @@ class Building:
             self.__get_points_to_calculate()
         )  # od razu buduje liste punktów do obliczenia zasięgu dla łatwiejszego dostępu
         self.Floor_heights = Floor_heights
-        self.available_routers = available_routers
+        self.available_routers = available_routers # TODO co to jest XD?
         
+
+    def add_floor(self, floor: Floor):
+        self.Floor_list.append(floor)
+        # aktualizujemy listę możliwych pozycji routerów i punktów do obliczenia
+        self.router_possible = self.__get_possible_router_positions()
+        self.points_to_calculate = self.__get_points_to_calculate()
+
     def __get_possible_router_positions(self) -> List:
         """
         Zwraca listę krotek (x, y, Floor_number) z możliwymi pozycjami routerów w całym budynku

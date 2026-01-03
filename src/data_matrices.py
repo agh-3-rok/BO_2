@@ -52,6 +52,7 @@ class Floor:
             raise ValueError("Wszystkie macierze muszą mieć ten sam rozmiar.")
 
         self.wall_matrix = wall_matrix
+        self.wall = wall_matrix  # alias dla starszego kodu (agregacja / bresenham)
         self.router = router_matrix
         self.cover = cover_matrix
         self.Floor_number = Floor_number  # to w sumie nie jest potrzebn

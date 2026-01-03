@@ -1,9 +1,14 @@
 import numpy as np
 from typing import List, Tuple, Optional, Any
+from typing import Callable 
 import random
 from .data_matrices import Building, Router
 from .config import SimulationConfig
 from .enums import TabuStrategy, AspirationStrategy, InitialSolutionStrategy, LocalChangeStrategy
+import time
+
+# pomocniczy typ dla callbacka postępu
+ProgressCallback = Callable[[int, float, float, object], None]  # (iteration, best, current, heatmap_or_None)
 
 class TabuSearch:
     """
@@ -318,7 +323,18 @@ class TabuSearch:
                 
         return False
     
-    def run(self) -> Tuple[List[int], float, dict, int]:
+    def run(
+        self,
+        # pomocnicze parametry do callbacka postępu -> używane w GUI 
+        on_progress: "ProgressCallback | None" = None,
+        *,
+        # to są parametry mówiące co jaki czas ma być callback
+        progress_every: int = 1,
+        heatmap_every: int = 10,
+        heatmap_floor_idx: int = 0,
+        ) -> Tuple[List[int], float, dict, int]:
+
+
         """Główna pętla algorytmu."""
         
         # Start (jeśli nie wywołano wcześniej init)
@@ -429,7 +445,16 @@ class TabuSearch:
             self.history['iterations'].append(iteration)
             self.history['best_values'].append(self.best_value)
             self.history['current_values'].append(current_val)
-        
+
+            # Live progress dla GUI (opcjonalnie)
+            if on_progress is not None and progress_every > 0 and (iteration % progress_every == 0):
+                heatmap = None
+                if heatmap_every and heatmap_every > 0 and (iteration % heatmap_every == 0):
+                    if self.building.Floor_list and 0 <= heatmap_floor_idx < len(self.building.Floor_list):
+                        heatmap = self.building.agregation_func_for_floor(heatmap_floor_idx, self.available_routers)
+                on_progress(iteration, float(self.best_value), float(current_val), heatmap)
+            time.sleep(0.001)  # małe opóźnienie by GUI zdążyło odświeżyć
+
         # Reset i ustawienie
         for r in self.available_routers:
             r.position = None

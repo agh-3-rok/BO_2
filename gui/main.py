@@ -7,7 +7,9 @@ from PyQt6.QtWidgets import (
     QSpinBox, QDoubleSpinBox, QGroupBox, QStackedWidget,
     QDialog, QDialogButtonBox,
     QListWidget, QFileDialog,
+    QMessageBox, QLabel,
 )
+
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -20,6 +22,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, '..'))
 sys.path.append(project_root)
 
+""" --- IMPORTY WŁASNYCH PLIKÓW --- """
 try:
     from gui.floor_define import FloorDefineWidget
     from gui.persistance import snapshot_to_npz, snapshot_from_npz
@@ -27,7 +30,6 @@ try:
 except ImportError:
     print("Nie można zaimportować modułu z folderu GUI. Upewnij się, że plik jest w dobrej ścieżce.")
     sys.exit(1)
-
 
 try:
     from src import data_matrices as bk
@@ -39,14 +41,63 @@ except ImportError as e:
     sys.exit(1)
 
 
+""" WORKERK -> SŁUŻY DO URUCHOMIENIA TABU SEARCH W WĄTKU TŁA """
+class TabuWorker(QThread):
+    progress = pyqtSignal(int, float, float, object)  # iteration, best, current, heatmap_or_None
+    finished_ok = pyqtSignal(object, float, object, int)  # best_solution, best_value, history, aspiration_cnt
+    failed = pyqtSignal(str)
 
-# --- GUI (Frontend) ---
+    def __init__(self, tabu: TabuSearch, *, progress_every = 1, heatmap_every = 10, heatmap_floor_idx = 0):
+        super().__init__()
+        self.tabu = tabu
+        self.progress_every = progress_every
+        self.heatmap_every = heatmap_every
+        self.heatmap_floor_idx = heatmap_floor_idx
+
+    def run(self):
+        # try:
+        #     def cb(iteration, best, current, heatmap):
+        #         self.progress.emit(iteration, best, current, heatmap)
+
+        #     best_sol, best_val, hist, asp = self.tabu.run(
+        #         on_progress=cb,
+        #         progress_every=self.progress_every,
+        #         heatmap_every=self.heatmap_every,
+        #         heatmap_floor_idx=self.heatmap_floor_idx,
+        #     )
+        #     self.finished_ok.emit(best_sol, float(best_val), hist, int(asp))
+        # except Exception as e:
+        #     self.failed.emit(str(e))
+        
+        try:
+            best_sol, best_val, hist, asp = self.tabu.run()
+            self.finished_ok.emit(best_sol, float(best_val), hist, int(asp))
+        except Exception as e:
+            self.failed.emit(str(e))
+
+
+# --- GUI (Frontend) OKNO APLIKACJI ---
 class MainWindow(QMainWindow):
+
     def __init__(self):
         super().__init__()
+
         # obiekt building przechowany w GUI do obliczeń
+        
         self.config = SimulationConfig()  # tworzymy bazowy config
         self.building = create_empty_building(self.config) # tworzymy bazowy budynek na configu bazowym 
+        
+        # self._refresh_heatmap_floor_list() # SYNCHRO
+
+        # pola służące do przechowywania stanu optymalizacji -- wątek i historia fitness
+        self.worker = None
+        self.history__iters = []
+        self.history_fitness = []
+        self.history_current = []
+
+        self._tabu_last = None  # ostatni obiekt tabu (po optymalizacji)
+
+        # nie pamietam co to 
         self._floor_defs = {}  # floor_number -> FloorDefinitionResult
 
         self.setWindowTitle("Router Placement - Tabu Search GUI")
@@ -58,6 +109,9 @@ class MainWindow(QMainWindow):
         main_view = QWidget()
         layout = QHBoxLayout(main_view)
         self.stack.addWidget(main_view)
+
+
+        """ Pola do ustawiania parametrów symulacji"""
 
         # Lewy panel sterowania, parametry 
         control_panel = QVBoxLayout()
@@ -86,7 +140,8 @@ class MainWindow(QMainWindow):
         form.addRow("Max Iteracji:", self.spin_iters)
 
 
-        # Przyciski
+
+        """ Przyciski """
         group.setLayout(form)
         control_panel.addWidget(group)
 
@@ -110,34 +165,55 @@ class MainWindow(QMainWindow):
         self.btn_run.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold; padding: 10px;")
         self.btn_run.clicked.connect(self.run_optimization)
         control_panel.addWidget(self.btn_run)
-        
+
+        # Etykieta do wyświetlania najlepszego wyniku
+        self.lbl_best_value = QLabel("Najlepszy zasięg: —")
+        control_panel.addWidget(self.lbl_best_value)
+
         control_panel.addStretch()
 
-        # Prawy panel - wizualizacja
+
+        """ Prawy panel - wizualizacja """
         vis_panel = QVBoxLayout()
         layout.addLayout(vis_panel, 3)
 
-        # Wykres 1: Mapa pokrycia
+        # Wykres 1: Mapa pokrycia + lista pięter
         self.fig_map = Figure()
         self.canvas_map = FigureCanvas(self.fig_map)
         self.ax_map = self.fig_map.add_subplot(111)
         self.ax_map.set_title("Heatmapa Zasięgu")
         self.heatmap = None
-        vis_panel.addWidget(self.canvas_map)
+
+        heat_row = QHBoxLayout()
+        vis_panel.addLayout(heat_row)
+
+        # po lewej: heatmapa
+        heat_row.addWidget(self.canvas_map, 1)
+
+        # po prawej: lista pięter
+        heat_floors_group = QGroupBox("Piętra (heatmapa)")
+        heat_floors_group.setMaximumWidth(180)
+        heat_floors_layout = QVBoxLayout()
+        self.list_heatmap_floors = QListWidget()
+        self.list_heatmap_floors.currentRowChanged.connect(self._on_heatmap_floor_changed)
+        heat_floors_layout.addWidget(self.list_heatmap_floors)
+        heat_floors_group.setLayout(heat_floors_layout)
+
+        heat_row.addWidget(heat_floors_group, 0)
+
 
         # Wykres 2: Wykres zbieżności
         self.fig_conv = Figure(figsize=(5, 3))
         self.canvas_conv = FigureCanvas(self.fig_conv)
         self.ax_conv = self.fig_conv.add_subplot(111)
         self.ax_conv.set_title("Funkcja Celu (Best Score)")
-        self.line_conv, = self.ax_conv.plot([], [], 'r-')
+        self.line_best, = self.ax_conv.plot([], [], 'r-', label='best')
+        self.line_current, = self.ax_conv.plot([], [], 'b-', label='current')
+        self.ax_conv.legend(loc="best")
         vis_panel.addWidget(self.canvas_conv)
 
-        self.worker = None
-        self.history_fitness = []
 
-
-        # strona do definicji macierzy dla pięter
+        """ Strona do definicji macierzy dla pięter """
 
         # przycisk powrotu do głównego okna
         self.definition_view = QWidget()
@@ -157,11 +233,12 @@ class MainWindow(QMainWindow):
         floors_list_group.setLayout(floors_list_layout)
         left_panel.addWidget(floors_list_group)
 
+
         definition_layout.addLayout(left_panel)
         definition_layout.addStretch()
         self.stack.addWidget(self.definition_view)
 
-        # jeśli lista pięter jest pusta, pokaż przycisk 
+
 
         # przycisk dodaj piętro
         floors_group = QGroupBox("Operacje na piętrach")
@@ -176,9 +253,11 @@ class MainWindow(QMainWindow):
         # widget do definiowania piętra
         self.floor_define = FloorDefineWidget(self.config, parent=self)
         definition_layout.insertWidget(1, self.floor_define, 1)
-
         self.floor_define.confirmed.connect(self._on_floor_defined)
 
+        self._refresh_heatmap_floor_list() # SYNCHRO
+
+    # metoda wywoływana po zatwierdzeniu definicji piętra w panelu definicji -> akutalizuje budynek
     def _on_floor_defined(self, result):
         fl_num = int(result.floor.Floor_number)
         self._floor_defs[fl_num] = result
@@ -193,7 +272,7 @@ class MainWindow(QMainWindow):
 
         self._refresh_floor_list()
         self.list_floors.setCurrentRow(fl_num)
-
+        self._refresh_heatmap_floor_list()
 
     # 4 metody do zapisu/wczytania symulacji i synchronizacji UI z configiem
 
@@ -242,10 +321,13 @@ class MainWindow(QMainWindow):
         self.config = config
         self.building = building
 
+        # SYNCHRONIZACJA UI
+        self._refresh_heatmap_floor_list()
         self._sync_ui_from_config()
 
         # odbuduj cache do edycji klikanej (żeby _on_floor_list_clicked działał zawsze)
         self._floor_defs = {}
+        self._refresh_heatmap_floor_list()
         for i, fl in enumerate(self.building.Floor_list):
             self._floor_defs[i] = FloorDefinitionResult(
                 floor=fl,
@@ -258,19 +340,50 @@ class MainWindow(QMainWindow):
         self.show_definition_page()
 
 
-    # metdoda uruchamiająca optymalizację
+    """ Metoda uruchamiająca optymalizację Tabu Search w wątku tła"""
     def run_optimization(self):
-       pass #TODO
+        if not self.building.Floor_list:
+            return  # brak pięter -> nie ma co liczyć
 
-    # metoda aktualizująca wykresy
-    def update_plots(self, iteration, fitness, matrix):
-        # 1. Wykres zbieżności
-        self.history_fitness.append(fitness)
-        self.line_conv.set_data(range(len(self.history_fitness)), self.history_fitness)
-        self.ax_conv.set_ylim(min(self.history_fitness)*0.9, max(self.history_fitness)*1.1 + 1)
+        self._sync_config_from_ui()
+
+        # Zbuduj routery (minimalny sensowny default)
+        routers = [
+            Router(Power=0.0, Max_users=10, Max_range=int(self.config.router_range))
+            for _ in range(int(self.config.num_routers))
+        ]
+
+        tabu = TabuSearch(self.building, routers, self.config)
+        self._tabu_last = tabu
+        # reset wykresu zbieżności i danyh itp po porzedniej optymalizacji
+        self.history_iters = []
+        self.history_best = []
+        self.history_current = []
+
+        self.ax_conv.clear()
+        self.ax_conv.set_title("Funkcja Celu (Best/Current)")
+        self.line_best, = self.ax_conv.plot([], [], 'r-', label='best')
+        self.line_current, = self.ax_conv.plot([], [], 'b-', label='current')
+        self.ax_conv.legend(loc="best")
         self.canvas_conv.draw()
 
-        # 2. Heatmapa
+
+        # uruchamiamy wątek 
+        self.worker = TabuWorker(tabu, progress_every=1, heatmap_every=10, heatmap_floor_idx=0)
+
+        # podłącz sygnały
+        # self.worker.progress.connect(self._on_algo_progress)
+        self.worker.finished_ok.connect(self._on_algo_finished)
+        self.worker.failed.connect(self._on_algo_failed)
+        
+        self.worker.start()
+
+
+
+    """ Metoda aktualizująca heatmapę na wykresie  to się rzadziej robi żeby nie latało za bardzo GUI"""
+    def update_heat(self, iteration, fitness, matrix):
+
+        #  Heatmapa
         if self.heatmap is None:
             self.heatmap = self.ax_map.imshow(matrix, cmap='jet', origin='upper', interpolation='nearest')
             self.fig_map.colorbar(self.heatmap, ax=self.ax_map)
@@ -280,13 +393,117 @@ class MainWindow(QMainWindow):
         
         self.canvas_map.draw()
 
+    # metoda odświeżająca listę pięter w panelu heatmapy
+    def _refresh_heatmap_floor_list(self):
+        self.list_heatmap_floors.blockSignals(True)
+        self.list_heatmap_floors.clear()
+        for i in range(len(self.building.Floor_list)):
+            self.list_heatmap_floors.addItem(f"Piętro {i}")
+        self.list_heatmap_floors.blockSignals(False)
 
+        if self.list_heatmap_floors.count() > 0 and self.list_heatmap_floors.currentRow() < 0:
+            self.list_heatmap_floors.setCurrentRow(0)
+
+    # metoda wywoływana po zmianie piętra w liście heatmapy
+    def _on_heatmap_floor_changed(self, row: int):
+        if row < 0:
+            return
+        if self._tabu_last is None:
+            return
+        if row >= len(self._tabu_last.building.Floor_list):
+            return
+
+        heat = self._tabu_last.building.agregation_func_for_floor(row, self._tabu_last.available_routers)
+        best_val = float(getattr(self._tabu_last, "best_value", 0.0))
+        self.update_heat(0, best_val, heat)
+
+    def _on_algo_progress(self, iteration: int, best: float, current: float, heatmap):
+        # zbieranie danych
+        self.history_iters.append(int(iteration))
+        self.history_best.append(float(best))
+        self.history_current.append(float(current))
+
+        # update linii (X = iteration)
+        self.line_best.set_data(self.history_iters, self.history_best)
+        self.line_current.set_data(self.history_iters, self.history_current)
+
+        # skale osi
+        if self.history_iters:
+            self.ax_conv.set_xlim(min(self.history_iters), max(self.history_iters))
+
+        all_y = self.history_best + self.history_current
+        if all_y:
+            lo = min(all_y)
+            hi = max(all_y)
+            if lo == hi:
+                lo -= 1.0
+                hi += 1.0
+            self.ax_conv.set_ylim(lo * 0.98, hi * 1.02)
+
+        self.canvas_conv.draw()
+
+        # heatmapa (opcjonalnie)
+        if heatmap is not None:
+            self.update_heat(iteration, best, heatmap)
+
+
+    # FUNKCJA OBŁUGUJĄCE KONIEC ALORYTMU
+    def _on_algo_finished(self, best_solution, best_value, history, aspiration_cnt):
+        
+        # rysowanie ze wszystkiego na końcu
+        iters = [int(x) for x in history.get("iterations", [])]
+        best = [float(x) for x in history.get("best_values", [])]
+        curr = [float(x) for x in history.get("current_values", [])]
+
+        self.ax_conv.clear()
+        self.ax_conv.set_title("Funkcja Celu (Best/Current)")
+        self.ax_conv.plot(iters, best, "r-", label="best")
+        self.ax_conv.plot(iters, curr, "b-", label="current")
+        self.ax_conv.legend(loc="best")
+
+        if iters:
+            self.ax_conv.set_xlim(0, max(iters))
+        all_y = best + curr
+        if all_y:
+            lo, hi = min(all_y), max(all_y)
+            if lo == hi:
+                lo -= 1.0
+                hi += 1.0
+            self.ax_conv.set_ylim(lo * 0.98, hi * 1.02)
+
+        self.canvas_conv.draw()
+
+        # Heatmapa tylko raz na końcu 
+        if hasattr(self, "_tabu_last") and self._tabu_last is not None:
+            heat = self._tabu_last.building.agregation_func_for_floor(0, self._tabu_last.available_routers)
+            self.update_heat(iters[-1] if iters else 0, best_value, heat)
+        
+
+        # okienko z komunikatem o zakończeniu
+        self.lbl_best_value.setText(f"Najlepsze rozwiązanie: {best_value:.6g}")
+
+        QMessageBox.information(
+            self,
+            "Koniec",
+            f"Algorytm zakończony.\n\nBest value: {best_value:.6g}\nAspirations: {aspiration_cnt}",
+        )
+
+        # opcjonalnie: posprzątaj wątek
+        self.worker = None
+    
+    # BEKOWA WIADOMOŚĆ O BŁĘDZIE
+    def _on_algo_failed(self, msg: str):
+        print("Algorytm wywalił się:", msg)
+
+    # FUNKCJA POKAZUJĄCA PANEL DEFINICJI
     def show_definition_page(self):
         self.stack.setCurrentWidget(self.definition_view)
 
+    # FUNKCJA POKAZUJĄCA GŁÓWNE OKNO
     def show_main_page(self):
         self.stack.setCurrentIndex(0)
     
+    # metoda odświeżająca listę pięter w panelu definicji
     def _refresh_floor_list(self):
         self.list_floors.blockSignals(True)
         self.list_floors.clear()
@@ -294,6 +511,7 @@ class MainWindow(QMainWindow):
             self.list_floors.addItem(f"Piętro {i}")
         self.list_floors.blockSignals(False)
 
+    # metoda wywoływana po kliknięciu na piętro w liście
     def _on_floor_list_clicked(self, item):
         text = item.text()  # "Piętro X"
         floor_number = int(text.split()[-1])
@@ -321,6 +539,7 @@ class MainWindow(QMainWindow):
         self.show_definition_page()
 
 
+    # metoda dodająca nowe piętro i odpalająca kafelki 
     def add_floor(self):
         if len(self.building.Floor_list) == 0:
             dialog = FloorSizeDialog(self)

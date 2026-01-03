@@ -51,7 +51,7 @@ class FloorDefineWidget(QWidget):
     """
 
     confirmed = pyqtSignal(object)  # FloorDefinitionResult
-    cancelled = pyqtSignal()
+    # cancelled = pyqtSignal()
 
     def __init__(
         self,
@@ -80,7 +80,7 @@ class FloorDefineWidget(QWidget):
 
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._set_mode(TileType.WALL)
-
+        
         # Startowo "pusto" (brak rozmiaru)
         self.set_enabled(False)
 
@@ -187,9 +187,9 @@ class FloorDefineWidget(QWidget):
         self.btn_confirm.clicked.connect(self._on_confirm)
         left.addWidget(self.btn_confirm)
 
-        self.btn_cancel = QPushButton("Anuluj")
-        self.btn_cancel.clicked.connect(self.cancelled.emit)
-        left.addWidget(self.btn_cancel)
+        # self.btn_cancel = QPushButton("Anuluj")
+        # self.btn_cancel.clicked.connect(self.cancelled.emit)
+        # left.addWidget(self.btn_cancel)
 
         root.addLayout(left, 0)
 
@@ -401,3 +401,9 @@ class FloorDefineWidget(QWidget):
                 cover_matrix=cover_matrix,
             )
         )
+
+
+         # wygaszenie po zatwierdzeniu
+        self.set_enabled(False)
+        self._pending_floor_number = None
+        self._last_cell = None

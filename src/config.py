@@ -24,4 +24,3 @@ class SimulationConfig:
     router_range: int = 10
     floor_damping: float = 2.0                  # Tłumienie stropu (fizyka)
     min_distance: float = 4.0                   # Minimalna odległość między ruterami
-    map_size: int = 50

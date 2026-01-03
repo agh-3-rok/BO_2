@@ -4,6 +4,16 @@ import random
 from data_matrices import Building, Router
 from enum import Enum
 
+#obszar jaki blokuje się gdy jako tabu wybieramy wlasnie blokowanie obszaru (podaje sie promień obszaru)
+BLOCK_AREA_RADIUS_RANGE = 5
+
+# parametr o ile % musi być lepiej (1.3 = 30% poprawy)
+ASPIRATION_LOCAL_GAIN_THRESHOLD = 1.05 
+
+# parametr który mówi jak musi się poprawić ruter który wcześniej był bezużyteczny
+ASPIRATION_LOCAL_GAIN_USABILITY_THRESHOLD = 50
+
+
 class TabuStrategy(Enum):
     BLOCK_ROUTER_ID = 1      # Zablokuj konkretny ID routera 
     BLOCK_AREA_RADIUS = 2    # Zablokuj stare miejsce i jego okolicę 
@@ -313,17 +323,12 @@ class TabuSearch:
         # jeśli wybrano strategię LOCAL_GAIN sprawdzaa dodatkowe warunki
         if self.aspiration_strategy == AspirationStrategy.LOCAL_GAIN:
             
-            # parametr o ile % musi być lepiej (1.3 = 30% poprawy)
-            THRESHOLD = 1.3 
-            # parametr który mówi jak musi się poprawić ruter który wcześniej był bezużyteczny
-            THRESHOLD_USABILITY = 50
-            
             # router był użyteczny i zyskał 30%
-            if old_router_score > 0 and new_router_score > (old_router_score * THRESHOLD):
+            if old_router_score > 0 and new_router_score > (old_router_score * ASPIRATION_LOCAL_GAIN_THRESHOLD):
                 return True
                 
             # router był bezużyteczny a teraz działa sensownie
-            if old_router_score == 0 and new_router_score > THRESHOLD_USABILITY:
+            if old_router_score == 0 and new_router_score > ASPIRATION_LOCAL_GAIN_USABILITY_THRESHOLD:
                 return True
                 
         return False
@@ -384,7 +389,7 @@ class TabuSearch:
                         # używamy metody do liczenia dystansu poziomego
                         dist = self.building.horizontal_distance(target_point, forbidden_point)
                         
-                        if dist < router_range: 
+                        if dist < BLOCK_AREA_RADIUS_RANGE: 
                             is_tabu = True
                             break
             

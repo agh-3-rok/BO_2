@@ -1,172 +1,140 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import copy
-
-# Upewnij się, że pliki data_matrices.py i optimizer.py są w tym samym folderze
+import pandas as pd # Opcjonalnie do ładnej tabelki, ale użyjemy printa jeśli nie masz pandas
 from data_matrices import Building, Floor, Router
 from algorithms import TabuSearch, TabuStrategy, AspirationStrategy
 
-# --- KONFIGURACJA ---
-MAP_SIZE = 30           # Rozmiar mapy (30x30 kratek)
-NUM_FLOORS = 2          # Liczba pięter
-NUM_ROUTERS = 4         # Liczba routerów
-ROUTER_POWER = 20       # Moc routera
-ROUTER_RANGE = 10       # Promień zasięgu
-MIN_DIST = 3.0          # Min. dystans między routerami
-MAX_ITER = 120          # Liczba iteracji na test
+# --- KONFIGURACJA TESTU ---
+NUM_RUNS = 30           # Ile razy powtórzyć każdy test (im więcej tym rzetelniej)
+MAX_ITER = 100          # Liczba iteracji w jednym przebiegu
+MAP_SIZE = 30
+NUM_ROUTERS = 5
+ROUTER_RANGE = 10
 
-def create_test_environment():
-    """
-    Tworzy budynek z 2 piętrami o różnych priorytetach.
-    Piętro 0: Korytarze (mało ważne).
-    Piętro 1: Biura (bardzo ważne).
-    """
+def create_environment():
+    """Tworzy czyste środowisko testowe (2 piętra)."""
     floors = []
-    
-    for f in range(NUM_FLOORS):
-        # 1. Ściany (puste pudełko + słupek na środku)
-        wall_matrix = np.zeros((MAP_SIZE, MAP_SIZE), dtype=float)
-        # Ściany zewnętrzne
-        wall_matrix[0, :] = 5.0
-        wall_matrix[-1, :] = 5.0
-        wall_matrix[:, 0] = 5.0
-        wall_matrix[:, -1] = 5.0
-        # Przeszkoda na środku
-        mid = MAP_SIZE // 2
-        wall_matrix[mid-2:mid+2, mid-2:mid+2] = 5.0
+    for f in range(2):
+        wall = np.zeros((MAP_SIZE, MAP_SIZE))
+        # Proste ściany
+        wall[10:20, 10:20] = 5.0 
         
-        # 2. Priorytety (Importance)
-        cover_matrix = np.zeros((MAP_SIZE, MAP_SIZE), dtype=int)
+        cover = np.zeros((MAP_SIZE, MAP_SIZE), dtype=int)
+        if f == 0: cover.fill(5)   # Parter niski priorytet
+        else:      cover.fill(50)  # Piętro wysoki priorytet
+        
         router_matrix = np.ones((MAP_SIZE, MAP_SIZE), dtype=int)
+        floors.append(Floor(wall, router_matrix, cover, f, 0.5))
         
-        if f == 0:
-            # Parter - priorytet 5 (mały)
-            cover_matrix.fill(5)
-        else:
-            # Piętro 1 - priorytet 50 (duży) -> Routery powinny uciekać tutaj!
-            cover_matrix.fill(50) 
-            
-            # Dodatkowo super ważny pokój w rogu piętra 1
-            cover_matrix[5:10, 5:10] = 200
-
-        floors.append(Floor(wall_matrix, router_matrix, cover_matrix, Floor_number=f, Floor_thickness=0.5))
-
-    building = Building(floors, Floor_heights=3.0, available_routers=[])
-    routers = [Router(ROUTER_POWER, 20, ROUTER_RANGE) for _ in range(NUM_ROUTERS)]
+    building = Building(floors, 3.0, [])
+    routers = [Router(20, 20, ROUTER_RANGE) for _ in range(NUM_ROUTERS)]
     building.available_routers = routers
-    
     return building, routers
 
-def plot_results(building, routers, title):
-    """Wizualizacja wyników dla wszystkich pięter."""
-    fig, axes = plt.subplots(1, NUM_FLOORS, figsize=(12, 5))
-    if NUM_FLOORS == 1: axes = [axes]
-    
-    fig.suptitle(title, fontsize=14, fontweight='bold')
-    
-    for f_idx, ax in enumerate(axes):
-        # Pobierz mapę sygnału (uwzględnia 3D)
-        signal_map = building.agregation_func_for_floor(f_idx, routers)
-        floor_obj = building.Floor_list[f_idx]
-        
-        # Rysuj sygnał
-        im = ax.imshow(signal_map, cmap='plasma', vmin=0, vmax=100) # vmax dostosuj do skali
-        
-        # Rysuj ściany
-        ax.imshow(floor_obj.wall, cmap='Greys', alpha=0.3)
-        
-        # Rysuj routery
-        for r in routers:
-            if r.position:
-                py, px = r.position.y, r.position.x
-                if r.position.Floor_number == f_idx:
-                    # Router na tym piętrze
-                    ax.scatter(py, px, c='lime', marker='P', s=150, edgecolors='black', label='Router Here')
-                else:
-                    # Router na innym piętrze (Ghost)
-                    ax.scatter(py, px, c='gray', marker='x', s=50, alpha=0.5, label='Router Other Floor')
-                    
-        ax.set_title(f"Floor {f_idx} (Max Priority: {np.max(floor_obj.cover)})")
-        ax.invert_yaxis()
+def run_benchmark():
+    # Definicja scenariuszy do porównania
+    scenarios = [
+        {
+            "name": "1. Classic",
+            "tabu": TabuStrategy.BLOCK_ROUTER_ID,
+            "asp": AspirationStrategy.GLOBAL_BEST,
+            "color": "gray"
+        },
+        {
+            "name": "2. Spatial Tabu",
+            "tabu": TabuStrategy.BLOCK_AREA_RADIUS,
+            "asp": AspirationStrategy.GLOBAL_BEST,
+            "color": "blue"
+        },
+        {
+            "name": "3. Full Modern",
+            "tabu": TabuStrategy.BLOCK_AREA_RADIUS,
+            "asp": AspirationStrategy.LOCAL_GAIN,
+            "color": "green"
+        }
+    ]
 
+    results_data = {s["name"]: {"scores": [], "aspirations": []} for s in scenarios}
+
+    print(f"Rozpoczynam benchmark: {NUM_RUNS} uruchomień dla każdego z {len(scenarios)} scenariuszy...")
+    print("=" * 70)
+
+    for s_idx, scenario in enumerate(scenarios):
+        print(f"Testowanie: {scenario['name']}...", end="", flush=True)
+        
+        for i in range(NUM_RUNS):
+            # 1. Czyste środowisko dla każdego uruchomienia
+            building, routers = create_environment()
+            
+            # 2. Inicjalizacja
+            opt = TabuSearch(
+                building=building,
+                available_routers=routers,
+                tabu_length=15,
+                max_iterations=MAX_ITER,
+                min_distance=3.0,
+                tabu_strategy=scenario['tabu'],
+                aspiration_strategy=scenario['asp']
+            )
+            
+            # 3. Uruchomienie (bez printów w środku run() żeby nie śmiecić)
+            # Warto zakomentować printy w optimizer.py na czas benchmarku!
+            opt.weighted_random_initial_solution() # Start
+            # Reset flagi rozwiązania startowego wewnątrz, symulacja czystego startu
+            opt.current_solution = list(opt.best_solution)
+            
+            # Run
+            _, best_val, _, asp_cnt = opt.run()
+            
+            # Zbieranie danych
+            results_data[scenario["name"]]["scores"].append(best_val)
+            results_data[scenario["name"]]["aspirations"].append(asp_cnt)
+            
+            # Kropka postępu
+            if i % 5 == 0: print(".", end="", flush=True)
+            
+        print(" Gotowe!")
+
+    # --- RAPORT ---
+    print("\n" + "=" * 70)
+    print(f"{'SCENARIO':<20} | {'AVG SCORE':<10} | {'MAX SCORE':<10} | {'AVG ASPIRATIONS'}")
+    print("-" * 70)
+    
+    for name, data in results_data.items():
+        avg_score = np.mean(data["scores"])
+        max_score = np.max(data["scores"])
+        avg_asp = np.mean(data["aspirations"])
+        print(f"{name:<20} | {avg_score:<10.1f} | {max_score:<10.1f} | {avg_asp:.2f}")
+
+    # --- WYKRESY ---
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+    
+    # 1. Boxplot wyników (Pokazuje stabilność i jakość)
+    score_lists = [results_data[s["name"]]["scores"] for s in scenarios]
+    names = [s["name"] for s in scenarios]
+    colors = [s["color"] for s in scenarios]
+    
+    bplot = ax1.boxplot(score_lists, patch_artist=True, labels=names)
+    
+    # Kolorowanie boxplota
+    for patch, color in zip(bplot['boxes'], colors):
+        patch.set_facecolor(color)
+        patch.set_alpha(0.6)
+        
+    ax1.set_title(f"Rozkład Wyników (Score) - {NUM_RUNS} prób")
+    ax1.set_ylabel("Funkcja Celu (Im więcej tym lepiej)")
+    ax1.grid(True, linestyle='--', alpha=0.7)
+
+    # 2. Barplot aspiracji (Pokazuje czy mechanizm działa)
+    avg_asps = [np.mean(results_data[s["name"]]["aspirations"]) for s in scenarios]
+    bars = ax2.bar(names, avg_asps, color=colors, alpha=0.7)
+    
+    ax2.set_title("Średnia liczba użyć Kryterium Aspiracji")
+    ax2.set_ylabel("Liczba zaakceptowanych ruchów Tabu")
+    ax2.bar_label(bars, fmt='%.2f')
+    
     plt.tight_layout()
     plt.show()
 
-def run_scenario(name, building, routers, t_strat, a_strat):
-    """Uruchamia pojedynczy scenariusz testowy."""
-    print(f"\n>>> TEST: {name}")
-    print(f"    Tabu Strategy: {t_strat.name}")
-    print(f"    Aspi Strategy: {a_strat.name}")
-    
-    # RESET ROUTERÓW (Bardzo ważne!)
-    for r in routers:
-        r.position = None
-        r.coverage_layers = {}
-    
-    # Inicjalizacja Optymalizatora
-    optimizer = TabuSearch(
-        building=building,
-        available_routers=routers,
-        tabu_length=15,
-        max_iterations=MAX_ITER,
-        min_distance=MIN_DIST,
-        tabu_strategy=t_strat,          # <--- Wybór strategii
-        aspiration_strategy=a_strat     # <--- Wybór aspiracji
-    )
-    
-    # Uruchomienie
-    # Wymuszamy start losowy, żeby mieć punkt odniesienia
-    optimizer.weighted_random_initial_solution()
-    start_val = optimizer.best_value
-    
-    # Fix po ręcznym inicie
-    optimizer.current_solution = list(optimizer.best_solution) 
-    
-    # Run
-    best_sol, best_val, history, asp_cnt = optimizer.run()
-    
-    gain = ((best_val - start_val) / start_val * 100) if start_val > 0 else 0
-    
-    print("-" * 50)
-    print(f"    Start Score: {start_val:.1f}")
-    print(f"    End Score:   {best_val:.1f}")
-    print(f"    Gain:        {gain:+.1f}%")
-    print(f"    Aspirations: {asp_cnt} (Ile razy złamano Tabu)")
-    print("-" * 50)
-    
-    return best_val, asp_cnt, history
-
-# --- MAIN ---
 if __name__ == "__main__":
-    building, routers = create_test_environment()
-    
-    # SCENARIUSZ 1: Klasyczny (Konserwatywny)
-    # Blokujemy router po ID, aspiracja tylko przy rekordzie świata
-    val1, asp1, hist1 = run_scenario(
-        "CLASSIC SETUP", 
-        building, routers,
-        TabuStrategy.BLOCK_ROUTER_ID, 
-        AspirationStrategy.GLOBAL_BEST
-    )
-    plot_results(building, routers, "Classic Results (Conservative)")
-
-    # SCENARIUSZ 2: Nowoczesny (Agresywny)
-    # Blokujemy obszar (radius), aspiracja przy lokalnym zysku routera
-    val2, asp2, hist2 = run_scenario(
-        "MODERN SETUP", 
-        building, routers,
-        TabuStrategy.BLOCK_AREA_RADIUS, 
-        AspirationStrategy.LOCAL_GAIN
-    )
-    plot_results(building, routers, "Modern Results (New Strategies)")
-    
-    # Porównanie wykresów zbieżności
-    plt.figure(figsize=(10, 6))
-    plt.plot(hist1['best_values'], label=f'Classic (Asp={asp1})', linestyle='--')
-    plt.plot(hist2['best_values'], label=f'Modern (Asp={asp2})', linewidth=2)
-    plt.title("Optimization Convergence Comparison")
-    plt.xlabel("Iteration")
-    plt.ylabel("Total Score")
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+    run_benchmark()

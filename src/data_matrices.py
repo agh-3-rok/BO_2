@@ -76,7 +76,6 @@ class Building:
         self.Floor_heights = Floor_heights
         self.available_routers = available_routers # TODO co to jest XD?
         
-
     def add_floor(self, floor: Floor):
         self.Floor_list.append(floor)
         # aktualizujemy listę możliwych pozycji routerów i punktów do obliczenia

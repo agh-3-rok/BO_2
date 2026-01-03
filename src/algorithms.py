@@ -2,6 +2,11 @@ import numpy as np
 from typing import List, Tuple, Optional
 import random
 from data_matrices import Building, Router
+from enum import Enum
+
+class TabuStrategy(Enum):
+    BLOCK_ROUTER_ID = 1      # Zablokuj konkretny ID routera 
+    BLOCK_AREA_RADIUS = 2    # Zablokuj stare miejsce i jego okolicę 
 
 class TabuSearch:
     """
@@ -14,7 +19,8 @@ class TabuSearch:
         available_routers: List[Router],
         tabu_length: int = 10,
         max_iterations: int = 100,
-        min_distance: float = 4.0
+        min_distance: float = 4.0,
+        strategy: TabuStrategy = TabuStrategy.BLOCK_ROUTER_ID
     ):
         """
         Args:
@@ -22,14 +28,21 @@ class TabuSearch:
             available_routers: lista dostępnych routerów do rozmieszczenia
             tabu_length: długość listy tabu
             max_iterations: maksymalna liczba iteracji
+            min_distance: minimalna odległość między ruterami
+            strategy: strategia w jakis sposób działa lista tabu i kryterium aspiracji
         """
         self.building = building
         self.available_routers = available_routers
         self.tabu_length = tabu_length
         self.max_iterations = max_iterations
         self.min_distance = min_distance
+        self.strategy = strategy
         
         # Stan algorytmu
+        
+        # Tabu list będzie przechowywać:
+        # - dla BLOCK_ROUTER_ID: int (id routera)
+        # - dla BLOCK_AREA_RADIUS: Point (punkt, który został zwolniony)
         self.tabu_list: List[int] = []
         self.current_solution = None
         self.best_solution = None
@@ -309,9 +322,29 @@ class TabuSearch:
             current_val = self.evaluate_solution()
     
             
-            # sprawdzenie w tabu - NOWA LOGIKA TABU bo nie dzialalo kryterium aspiracji
-            # Sprawdzamy czy ten router był niedawno ruszany?
-            is_tabu = r_id in self.tabu_list
+            # sprawdzenie w tabu: dwie możliwe logiki
+            is_tabu = False
+            
+            if self.strategy == TabuStrategy.BLOCK_ROUTER_ID:
+                # Strategia - czy ten router jest na liście zablokowanych
+                is_tabu = r_id in self.tabu_list
+                
+            elif self.strategy == TabuStrategy.BLOCK_AREA_RADIUS:
+                # Strategia - czy nowe miejsce jest w pobliżu starego miejsca
+                target_point = self.building.router_possible[new_p]
+                
+                # promień zakazu to zasięg routera
+                router_range = self.available_routers[r_id].max_range 
+                
+                for forbidden_point in self.tabu_list:
+                    # sprawdzamy tylko jeśli to to samo piętro
+                    if target_point.Floor_number == forbidden_point.Floor_number:
+                        # używamy metody do liczenia dystansu poziomego
+                        dist = self.building.horizontal_distance(target_point, forbidden_point)
+                        
+                        if dist < router_range: 
+                            is_tabu = True
+                            break
             
             # ocena rozwiązania
             accept = False
@@ -319,25 +352,32 @@ class TabuSearch:
             if not is_tabu:
                 accept = True
             elif current_val > self.best_value:
+                # Kryterium Aspiracji
                 accept = True
                 aspiration_cnt += 1
             
             if accept:
-                #ruch przyjęty
-                self.tabu_list.append(r_id) # dodajemy ruter do tabu
+                # akutalizacja listy tabu w zależności od strategii
+                if self.strategy == TabuStrategy.BLOCK_ROUTER_ID:
+                    # blokujemy ID routera
+                    self.tabu_list.append(r_id)
+                    
+                elif self.strategy == TabuStrategy.BLOCK_AREA_RADIUS:
+                    # Blokujemy fizyczny punkt który właśnie opuściliśmy
+                    old_point_obj = self.building.router_possible[old_p]
+                    self.tabu_list.append(old_point_obj)
                 
+                # utrzymanie dlugosci listy
                 if len(self.tabu_list) > self.tabu_length:
                     self.tabu_list.pop(0)
                 
+                # aktualizacja best solution
                 if current_val > self.best_value:
                     self.best_solution = list(self.current_solution)
                     self.best_value = current_val
             else:
-                # ruch odrzucony
-                # cofanie zmiany
+                # odrzucenie ruchu
                 self._revert_move(r_id, old_p, new_p)
-                
-                # przywrócenie current_value do wykresików
                 if self.history['current_values']:
                     current_val = self.history['current_values'][-1]
                 else:
@@ -347,14 +387,11 @@ class TabuSearch:
             self.history['iterations'].append(iteration)
             self.history['best_values'].append(self.best_value)
             self.history['current_values'].append(current_val)
-
-        # ustawienie rozwiązania na najlepsze
-        self.current_solution = list(self.best_solution)
         
         # Reset i ustawienie
         for r in self.available_routers:
             r.position = None
-            r.coverage_grid = None
+            r.coverage_layers = {}
             
         for pos_idx, r_id in enumerate(self.best_solution):
             if r_id != -1:

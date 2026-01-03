@@ -396,7 +396,7 @@ class Building:
         
         return signal_db
     
-    def agregation_func(self, routers: List[Router]) -> np.ndarray:
+    def agregation_func_for_floor(self, floor_idx: int, routers: List[Router]) -> np.ndarray:
         """
         Funkcja realizuje wzór na agregację/max sygnału, wykorzystując obiekty Router z ich kratkami zasięgu.
         Oblicza całą siatkę zasięgów jako maximum ze wszystkich routerów.
@@ -409,46 +409,51 @@ class Building:
             ranges (np.ndarray): globalna siatka zasięgów (maximum ze wszystkich routerów)
         """
         
-        # NARAZIE POMIJAM ILOSC PIĘTER WYSTACZY DODAC FOR PO PIĘTRACH POTEM
-        pietro = self.Floor_list[0]
-        H, W = pietro.wall.shape
+        target_floor = self.Floor_list[floor_idx]
+        H, W = target_floor.wall.shape
         
         global_map = np.zeros((H, W), dtype=float)
         
-        # Dla każdego routera agreguj jego kratkę zasięgu do mapy globalnej
+        # dla każdego rutera agreguje się jego kratkę zasięgu
         for router in routers:
-            # Pomiń routery bez obliczonej kratki
-            if router.coverage_grid is None or router.grid_corner is None:
+            # rutery nieustawione są pomijane
+            if router.position is None or not router.coverage_layers:
                 continue
             
-            local_grid = router.coverage_grid
-            start_row, start_col = router.grid_corner
+            #sprawdzamy gdzie jest ruter a gdzie piętro dla któego liczymy
+            router_floor = router.position.Floor_number
+            delta = floor_idx - router_floor
             
-            # Wymiary małego wycinka
-            h_local, w_local = local_grid.shape
-
-            # Sprawdzamy, gdzie wycinek realnie zaczyna się i kończy na mapie globalnej
-            global_r_start = max(0, start_row)
-            global_r_end = min(H, start_row + h_local)
-            global_c_start = max(0, start_col)
-            global_c_end = min(W, start_col + w_local)
-
-            # Sprawdzamy, które fragmenty wycinka lokalnego odpowiadają tym zakresom
-            # (Jeśli start_row < 0, musimy uciąć początek wycinka lokalnego)
-            local_r_start = global_r_start - start_row
-            local_r_end = local_r_start + (global_r_end - global_r_start)
-            local_c_start = global_c_start - start_col
-            local_c_end = local_c_start + (global_c_end - global_c_start)
-        
-            # Jeśli wycinek jest całkowicie poza mapą, pomijamy
-            if global_r_start >= global_r_end or global_c_start >= global_c_end:
-                continue
-
-            # Bierzemy max z tego co już jest na mapie vs nowy wycinek
-            current_slice = global_map[global_r_start:global_r_end, global_c_start:global_c_end]
-            new_slice = local_grid[local_r_start:local_r_end, local_c_start:local_c_end]
+            #sprawdzamy czy ten ruter ma w ogóle policzone dla naszego piętra
+            if delta in router.coverage_layers:
+                local_grid = router.coverage_layers[delta]
+                start_row, start_col = router.grid_corner
             
-            global_map[global_r_start:global_r_end, global_c_start:global_c_end] = np.maximum(current_slice, new_slice)
+                # wymiary małego wycinka
+                h_local, w_local = local_grid.shape
+
+                # sprawdzamy gdzie wycinek realnie zaczyna się i kończy na mapie globalnej
+                global_r_start = max(0, start_row)
+                global_r_end = min(H, start_row + h_local)
+                global_c_start = max(0, start_col)
+                global_c_end = min(W, start_col + w_local)
+
+                # sprawdzamy które fragmenty wycinka lokalnego odpowiadają tym zakresom
+                # (Jeśli start_row < 0 musimy uciąć początek wycinka lokalnego)
+                local_r_start = global_r_start - start_row
+                local_r_end = local_r_start + (global_r_end - global_r_start)
+                local_c_start = global_c_start - start_col
+                local_c_end = local_c_start + (global_c_end - global_c_start)
+            
+                # Jeśli wycinek jest całkowicie poza mapą, pomijamy
+                if global_r_start >= global_r_end or global_c_start >= global_c_end:
+                    continue
+
+                # Bierzemy max z tego co już jest na mapie vs nowy wycinek
+                current_slice = global_map[global_r_start:global_r_end, global_c_start:global_c_end]
+                new_slice = local_grid[local_r_start:local_r_end, local_c_start:local_c_end]
+            
+                global_map[global_r_start:global_r_end, global_c_start:global_c_end] = np.maximum(current_slice, new_slice)
 
         return global_map
 
@@ -576,4 +581,4 @@ class Router:
             
             # zapis wartswy do slownika
             self.coverage_layers[delta_f] = local_router_square
-            
+            self.grid_corner = (left_upper_x, left_upper_y)

@@ -1,11 +1,13 @@
 import sys
 import os
 import numpy as np
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, 
-                             QWidget, QPushButton, QFormLayout, 
-                             QSpinBox, QDoubleSpinBox, QGroupBox, QStackedWidget,
-                             QDialog, QDialogButtonBox , QDialog, QDialogButtonBox, 
-                             QListWidget,)
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QVBoxLayout, QHBoxLayout,
+    QWidget, QPushButton, QFormLayout,
+    QSpinBox, QDoubleSpinBox, QGroupBox, QStackedWidget,
+    QDialog, QDialogButtonBox,
+    QListWidget, QFileDialog,
+)
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -20,6 +22,8 @@ sys.path.append(project_root)
 
 try:
     from gui.floor_define import FloorDefineWidget
+    from gui.persistance import snapshot_to_npz, snapshot_from_npz
+    from gui.floor_define import FloorDefinitionResult
 except ImportError:
     print("Nie można zaimportować modułu z folderu GUI. Upewnij się, że plik jest w dobrej ścieżce.")
     sys.exit(1)
@@ -91,6 +95,15 @@ class MainWindow(QMainWindow):
         self.btn_show_empty.clicked.connect(self.show_definition_page)
         control_panel.addWidget(self.btn_show_empty)
 
+
+        # przyciski zapisu/wczytania symulacji
+        self.btn_save_sim = QPushButton("Zapisz symulację")
+        self.btn_save_sim.clicked.connect(self.save_simulation)
+        control_panel.addWidget(self.btn_save_sim)
+
+        self.btn_load_sim = QPushButton("Wczytaj symulację")
+        self.btn_load_sim.clicked.connect(self.load_simulation)
+        control_panel.addWidget(self.btn_load_sim)
 
         # Przycisk uruchomienia optymalizacji
         self.btn_run = QPushButton("URUCHOM OPTYMALIZACJĘ")
@@ -181,9 +194,75 @@ class MainWindow(QMainWindow):
         self._refresh_floor_list()
         self.list_floors.setCurrentRow(fl_num)
 
+
+    # 4 metody do zapisu/wczytania symulacji i synchronizacji UI z configiem
+
+    # pomocnicza metoda służąca do synchronizacji configu z UI
+    # przed zapisem symulacji
+    def _sync_config_from_ui(self):
+        self.config.floor_damping = float(self.spin_damping.value())
+        self.config.tabu_length = int(self.spin_tabu_len.value())
+        self.config.max_iterations = int(self.spin_iters.value())
+
+    # pomocnicza metoda służąca do synchronizacji UI z configiem
+    # po wczytaniu symulacji
+    def _sync_ui_from_config(self):
+        self.spin_damping.setValue(float(self.config.floor_damping))
+        self.spin_tabu_len.setValue(int(self.config.tabu_length))
+        self.spin_iters.setValue(int(self.config.max_iterations))
+
+    # metoda używana przy zapisie symulacji
+    def save_simulation(self):
+        self._sync_config_from_ui()
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Zapisz symulację",
+            "",
+            "BO2 Simulation (*.npz)",
+        )
+        if not path:
+            return
+
+        snapshot_to_npz(path, config=self.config, building=self.building)
+
+    # metoda używana przy wczytaniu symulacji
+    def load_simulation(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Wczytaj symulację",
+            "",
+            "BO2 Simulation (*.npz)",
+        )
+        if not path:
+            return
+
+        config, building = snapshot_from_npz(path)
+
+        self.config = config
+        self.building = building
+
+        self._sync_ui_from_config()
+
+        # odbuduj cache do edycji klikanej (żeby _on_floor_list_clicked działał zawsze)
+        self._floor_defs = {}
+        for i, fl in enumerate(self.building.Floor_list):
+            self._floor_defs[i] = FloorDefinitionResult(
+                floor=fl,
+                wall_matrix=fl.wall_matrix,
+                router_matrix=fl.router,
+                cover_matrix=fl.cover,
+            )
+
+        self._refresh_floor_list()
+        self.show_definition_page()
+
+
+    # metdoda uruchamiająca optymalizację
     def run_optimization(self):
        pass #TODO
 
+    # metoda aktualizująca wykresy
     def update_plots(self, iteration, fitness, matrix):
         # 1. Wykres zbieżności
         self.history_fitness.append(fitness)
@@ -200,6 +279,7 @@ class MainWindow(QMainWindow):
             self.heatmap.set_clim(vmin=np.min(matrix), vmax=np.max(matrix)) # Autoskalowanie kolorów
         
         self.canvas_map.draw()
+
 
     def show_definition_page(self):
         self.stack.setCurrentWidget(self.definition_view)

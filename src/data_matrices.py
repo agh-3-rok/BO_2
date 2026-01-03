@@ -1,13 +1,8 @@
-# tutaj wstawiam kilka danych
 from __future__ import annotations # To rozwiązuje problem kolejności klas
 import numpy as np
-from typing import List, Tuple
+from typing import List
 from math import floor
-
-FLOOR_DAMPING_PARAM = 2.0  #przykładowa wartość tłumienia podłogi między piętrami
-FLOOR_HEIGHT = 3
-TABU_LIST_LENGTH = 10  # przykładowa długość tabu listy
-MAX_ITERATIONS = 100  # przykładowa maksymalna liczba iteracji tabu search
+from config import SimulationConfig
 
 
 class Point:
@@ -68,7 +63,7 @@ class Building:
     # zawiera listę pięter
 
     def __init__(
-        self, Floors: list[Floor], Floor_heights: int, available_routers: list[Router]
+        self, Floors: list[Floor], Floor_heights: int, available_routers: list[Router], config: SimulationConfig
     ):
         self.Floor_list = Floors
         self.router_possible = (
@@ -79,8 +74,8 @@ class Building:
         )  # od razu buduje liste punktów do obliczenia zasięgu dla łatwiejszego dostępu
         self.Floor_heights = Floor_heights
         self.available_routers = available_routers # TODO co to jest XD?
+        self.config = config
         
-
     def add_floor(self, floor: Floor):
         self.Floor_list.append(floor)
         # aktualizujemy listę możliwych pozycji routerów i punktów do obliczenia
@@ -386,7 +381,7 @@ class Building:
         if distance == 0:
             raise ValueError("Distance between point and router cannot be zero.")
         
-        damping = self.get_damping(point, router, FLOOR_DAMPING_PARAM)
+        damping = self.get_damping(point, router, self.config.floor_damping)
         
         # Przykładowa formuła na sygnał w dB
         signal_db = - (20 * np.log10(distance) + damping) + router_power
@@ -396,7 +391,7 @@ class Building:
         
         return signal_db
     
-    def agregation_func(self, routers: List[Router]) -> np.ndarray:
+    def agregation_func_for_floor(self, floor_idx: int, routers: List[Router]) -> np.ndarray:
         """
         Funkcja realizuje wzór na agregację/max sygnału, wykorzystując obiekty Router z ich kratkami zasięgu.
         Oblicza całą siatkę zasięgów jako maximum ze wszystkich routerów.
@@ -409,46 +404,51 @@ class Building:
             ranges (np.ndarray): globalna siatka zasięgów (maximum ze wszystkich routerów)
         """
         
-        # NARAZIE POMIJAM ILOSC PIĘTER WYSTACZY DODAC FOR PO PIĘTRACH POTEM
-        pietro = self.Floor_list[0]
-        H, W = pietro.wall.shape
+        target_floor = self.Floor_list[floor_idx]
+        H, W = target_floor.wall.shape
         
         global_map = np.zeros((H, W), dtype=float)
         
-        # Dla każdego routera agreguj jego kratkę zasięgu do mapy globalnej
+        # dla każdego rutera agreguje się jego kratkę zasięgu
         for router in routers:
-            # Pomiń routery bez obliczonej kratki
-            if router.coverage_grid is None or router.grid_corner is None:
+            # rutery nieustawione są pomijane
+            if router.position is None or not router.coverage_layers:
                 continue
             
-            local_grid = router.coverage_grid
-            start_row, start_col = router.grid_corner
+            #sprawdzamy gdzie jest ruter a gdzie piętro dla któego liczymy
+            router_floor = router.position.Floor_number
+            delta = floor_idx - router_floor
             
-            # Wymiary małego wycinka
-            h_local, w_local = local_grid.shape
-
-            # Sprawdzamy, gdzie wycinek realnie zaczyna się i kończy na mapie globalnej
-            global_r_start = max(0, start_row)
-            global_r_end = min(H, start_row + h_local)
-            global_c_start = max(0, start_col)
-            global_c_end = min(W, start_col + w_local)
-
-            # Sprawdzamy, które fragmenty wycinka lokalnego odpowiadają tym zakresom
-            # (Jeśli start_row < 0, musimy uciąć początek wycinka lokalnego)
-            local_r_start = global_r_start - start_row
-            local_r_end = local_r_start + (global_r_end - global_r_start)
-            local_c_start = global_c_start - start_col
-            local_c_end = local_c_start + (global_c_end - global_c_start)
-        
-            # Jeśli wycinek jest całkowicie poza mapą, pomijamy
-            if global_r_start >= global_r_end or global_c_start >= global_c_end:
-                continue
-
-            # Bierzemy max z tego co już jest na mapie vs nowy wycinek
-            current_slice = global_map[global_r_start:global_r_end, global_c_start:global_c_end]
-            new_slice = local_grid[local_r_start:local_r_end, local_c_start:local_c_end]
+            #sprawdzamy czy ten ruter ma w ogóle policzone dla naszego piętra
+            if delta in router.coverage_layers:
+                local_grid = router.coverage_layers[delta]
+                start_row, start_col = router.grid_corner
             
-            global_map[global_r_start:global_r_end, global_c_start:global_c_end] = np.maximum(current_slice, new_slice)
+                # wymiary małego wycinka
+                h_local, w_local = local_grid.shape
+
+                # sprawdzamy gdzie wycinek realnie zaczyna się i kończy na mapie globalnej
+                global_r_start = max(0, start_row)
+                global_r_end = min(H, start_row + h_local)
+                global_c_start = max(0, start_col)
+                global_c_end = min(W, start_col + w_local)
+
+                # sprawdzamy które fragmenty wycinka lokalnego odpowiadają tym zakresom
+                # (Jeśli start_row < 0 musimy uciąć początek wycinka lokalnego)
+                local_r_start = global_r_start - start_row
+                local_r_end = local_r_start + (global_r_end - global_r_start)
+                local_c_start = global_c_start - start_col
+                local_c_end = local_c_start + (global_c_end - global_c_start)
+            
+                # Jeśli wycinek jest całkowicie poza mapą, pomijamy
+                if global_r_start >= global_r_end or global_c_start >= global_c_end:
+                    continue
+
+                # Bierzemy max z tego co już jest na mapie vs nowy wycinek
+                current_slice = global_map[global_r_start:global_r_end, global_c_start:global_c_end]
+                new_slice = local_grid[local_r_start:local_r_end, local_c_start:local_c_end]
+            
+                global_map[global_r_start:global_r_end, global_c_start:global_c_end] = np.maximum(current_slice, new_slice)
 
         return global_map
 
@@ -463,12 +463,12 @@ class Building:
         scores = []
         
         for router in self.available_routers:
-            # 1. Jeśli router nie jest ustawiony, jego użyteczność to 0
-            if router.position is None or router.coverage_grid is None:
+            # Jeśli router nie jest ustawiony, jego użyteczność to 0
+            if router.position is None or router.coverage_layers is None:
                 scores.append(0.0)
                 continue
                 
-            # 2. Pobieramy piętro, na którym jest router
+            # Pobieramy piętro, na którym jest router
             floor_idx = router.position.Floor_number
             # Zabezpieczenie, gdyby router miał złe piętro
             if floor_idx >= len(self.Floor_list):
@@ -481,7 +481,7 @@ class Building:
             H_map, W_map = pietro.cover.shape
             
             # Wymiary małej kratki routera
-            local_grid = router.coverage_grid
+            local_grid = router.coverage_layers[0]
             start_row, start_col = router.grid_corner # Lewy górny róg na mapie globalnej
             h_local, w_local = local_grid.shape
             
@@ -514,12 +514,13 @@ class Building:
             
         return scores
 
+
 class Router:
     def __init__(self, Power: float, Max_users: int, Max_range: int):
         self.power = Power
         self.max_users = Max_users
         self.position = None
-        self.coverage_grid = None
+        self.coverage_layers = {}
         self.grid_corner = None
         self.max_range = Max_range
         
@@ -528,32 +529,52 @@ class Router:
 
     def calculate_coverage(self, building: Building):
         """
-        Oblicza zasięg od pojedynczego ruter, w jego istotnym otoczeniu. Wartości oblicza się w dB
+        Oblicza zasięg od pojedynczego ruter, w jego istotnym otoczeniu. Wartości oblicza się w dB. 
+        Teraz liczy dla 3d, czyli będzie zwracać słownik w którym dla klucza np. 0 - zwroci kratke pietra na ktorym jest ruter
+        dla klucza 1 - zwroci kratkę na piętrze o jeden ponad nim, a dla -1 na piętrze poniżej.
         
-        Args:
-            building (dm.Building): budynek
-            router_point (dm.Point): punkt w którym znajduje się ruter
-            R_max (int): threshold dystansu
-        Returns:
-            building_box (np.ndarray) - mała macierz - lokalna mapa zasięgu
-            point (dm.Point) - współrzędne lewego górnego rogu lokalnej macierzy
-        
-        krotka z tych dwóch?
+        Liczbę pięter dla których sie liczy należy ustawić w tej funkcji jako floor_offsets
         """ 
-        local_router_square = np.zeros((self.max_range, self.max_range))
+        
+        self.coverage_layers = {}
+        
+        # tutaj ustawia się dla ilu pięter liczyć, 3 piętra powinny wystarczyc przez silne tlumienie na stropach
+        floor_offsets = [0, -1, 1]
+        
+        # piętro na którym jest ruter
+        current_floor_idx = self.position.Floor_number
+        
         
         #x, y współrzędne lewego górnego rogu 
         left_upper_x = self.position.x - self.max_range // 2
         left_upper_y = self.position.y - self.max_range // 2
         
-        for i in range(self.max_range):
-            for j in range(self.max_range):
-                if (left_upper_x + i, left_upper_y + j) != (self.position.x, self.position.y):
-                    local_router_square[i, j] = 10**(building.goal_function_point(Point(left_upper_x + i, left_upper_y + j, 0), self.position, self.power)/10)
-                else:
-                    local_router_square[i, j] = 10**(self.power/10) #WARTOŚĆ SYGNAŁU W MIEJSCU RUTERA
-        
-        self.coverage_grid = local_router_square
-        self.grid_corner = (left_upper_x, left_upper_y)
-    
+        for delta_f in floor_offsets:
+            target_floor_idx = current_floor_idx + delta_f
             
+            # Sprawdź, czy takie piętro w ogóle istnieje w budynku
+            if target_floor_idx < 0 or target_floor_idx >= len(building.Floor_list):
+                continue
+                
+            # pusta kratka dla danego piętra
+            local_router_square = np.zeros((self.max_range, self.max_range))
+        
+            for i in range(self.max_range):
+                for j in range(self.max_range):
+                    
+                    # punkt na danym piętrze dla którego będziemy liczyć
+                    target_point = Point(left_upper_x + i, left_upper_y + j, target_floor_idx)
+                    
+                    # jeśli jest to punkt w którym stoi ruter to ustawiamy w tym miejscu jego moc
+                    if delta_f == 0 and (left_upper_x + i, left_upper_y + j) == (self.position.x, self.position.y):
+                        val_db = self.power
+                    else:
+                        # obliczanie dla reszty punktów
+                        val_db = building.goal_function_point(target_point, self.position, self.power)
+                    
+                    # konwersja na moc liniową zeby latiwej liczyc agreagacje
+                    local_router_square[i, j] = 10**(val_db / 10.0)
+            
+            # zapis wartswy do slownika
+            self.coverage_layers[delta_f] = local_router_square
+            self.grid_corner = (left_upper_x, left_upper_y)

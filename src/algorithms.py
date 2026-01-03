@@ -336,7 +336,7 @@ class TabuSearch:
     
             
             # sprawdzenie w tabu - NOWA LOGIKA TABU bo nie dzialalo kryterium aspiracji
-            # Sprawdzamy: Czy ten router był niedawno ruszany?
+            # Sprawdzamy czy ten router był niedawno ruszany?
             is_tabu = r_id in self.tabu_list
             
             # ocena rozwiązania
@@ -345,7 +345,6 @@ class TabuSearch:
             if not is_tabu:
                 accept = True
             elif current_val > self.best_value:
-                # TODO: Inne kryterium aspiracji dodać ewentualnie?
                 accept = True
                 aspiration_cnt += 1
             

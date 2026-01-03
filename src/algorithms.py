@@ -8,6 +8,10 @@ class TabuStrategy(Enum):
     BLOCK_ROUTER_ID = 1      # Zablokuj konkretny ID routera 
     BLOCK_AREA_RADIUS = 2    # Zablokuj stare miejsce i jego okolicę 
 
+class AspirationStrategy(Enum):
+    GLOBAL_BEST = 1          # Akceptuj tylko jeśli pobijesz najlepszy wynik
+    LOCAL_GAIN = 2           # Akceptuj jeśli pobijesz najlepszy wynik lub jeśli router drastycznie zyskał
+
 class TabuSearch:
     """
     Algorytm Tabu Search dla optymalizacji rozmieszczenia routerów w budynku.

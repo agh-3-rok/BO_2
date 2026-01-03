@@ -4,7 +4,8 @@ import numpy as np
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, 
                              QWidget, QPushButton, QFormLayout, 
                              QSpinBox, QDoubleSpinBox, QGroupBox, QStackedWidget,
-                             QDialog, QDialogButtonBox)
+                             QDialog, QDialogButtonBox , QDialog, QDialogButtonBox, 
+                             QListWidget,)
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -17,12 +18,18 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, '..'))
 sys.path.append(project_root)
 
+try:
+    from gui.floor_define import FloorDefineWidget
+except ImportError:
+    print("Nie można zaimportować modułu z folderu GUI. Upewnij się, że plik jest w dobrej ścieżce.")
+    sys.exit(1)
+
 
 try:
     from src import data_matrices as bk
     from src.data_matrices import Building, Floor, Router
     from src.algorithms import TabuSearch
-
+    from src.config import SimulationConfig
 except ImportError as e:
     print(f"Błąd importu! Upewnij się, że plik backendu jest w dobrej ścieżce. Info: {e}")
     sys.exit(1)
@@ -34,7 +41,9 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         # obiekt building przechowany w GUI do obliczeń
-        self.building = create_empty_building(floor_heights=3.0)
+        self.config = SimulationConfig()  # tworzymy bazowy config
+        self.building = create_empty_building(self.config) # tworzymy bazowy budynek na configu bazowym 
+        self._floor_defs = {}  # floor_number -> FloorDefinitionResult
 
         self.setWindowTitle("Router Placement - Tabu Search GUI")
         self.resize(1100, 700)
@@ -56,26 +65,19 @@ class MainWindow(QMainWindow):
         # pole 1: Tłumienie podłogi
         self.spin_damping = QDoubleSpinBox()
         self.spin_damping.setRange(0.0, 50.0)
-        self.spin_damping.setValue(2.0) # Domyślna wartość z pliku
+        self.spin_damping.setValue(self.config.floor_damping) # Domyślna wartość z pliku
         self.spin_damping.setSingleStep(0.5)
         form.addRow("Tłumienie podłogi (dB):", self.spin_damping)
-        
-        # pole 3: Wysokość piętra (m)
-        self.spin_floor_height = QDoubleSpinBox()
-        self.spin_floor_height.setRange(1.0, 10.0)
-        self.spin_floor_height.setValue(3.0) # Domyślna wartość
-        self.spin_floor_height.setSingleStep(0.1)
-        form.addRow("Wysokość piętra (m):", self.spin_floor_height)
 
         # pole 2: Długość Tabu
         self.spin_tabu_len = QSpinBox()
-        self.spin_tabu_len.setValue(10)
+        self.spin_tabu_len.setValue(self.config.tabu_length)
         form.addRow("Długość Tabu:", self.spin_tabu_len)
 
         # pole 3: Maksymalna liczba iteracji
         self.spin_iters = QSpinBox()
         self.spin_iters.setRange(10, 5000)
-        self.spin_iters.setValue(100)
+        self.spin_iters.setValue(self.config.max_iterations)
         self.spin_iters.setSingleStep(10)
         form.addRow("Max Iteracji:", self.spin_iters)
 
@@ -122,7 +124,7 @@ class MainWindow(QMainWindow):
         self.history_fitness = []
 
 
-        # strona do definicji macierzy 
+        # strona do definicji macierzy dla pięter
 
         # przycisk powrotu do głównego okna
         self.definition_view = QWidget()
@@ -132,6 +134,16 @@ class MainWindow(QMainWindow):
         back_btn = QPushButton("Powrót do głównego okna")
         back_btn.clicked.connect(self.show_main_page)
         left_panel.addWidget(back_btn)
+    
+        # lista pięter
+        floors_list_group = QGroupBox("Lista pięter")
+        floors_list_layout = QVBoxLayout()
+        self.list_floors = QListWidget()
+        self.list_floors.itemClicked.connect(self._on_floor_list_clicked)
+        floors_list_layout.addWidget(self.list_floors)
+        floors_list_group.setLayout(floors_list_layout)
+        left_panel.addWidget(floors_list_group)
+
         definition_layout.addLayout(left_panel)
         definition_layout.addStretch()
         self.stack.addWidget(self.definition_view)
@@ -145,8 +157,29 @@ class MainWindow(QMainWindow):
         self.btn_add_floor.clicked.connect(self.add_floor)
         floors_layout.addWidget(self.btn_add_floor)
         floors_group.setLayout(floors_layout)
-        self.definition_view.layout().addWidget(floors_group)
+        left_panel.addWidget(floors_group)
         
+
+        # widget do definiowania piętra
+        self.floor_define = FloorDefineWidget(self.config, parent=self)
+        definition_layout.insertWidget(1, self.floor_define, 1)
+
+        self.floor_define.confirmed.connect(self._on_floor_defined)
+
+    def _on_floor_defined(self, result):
+        fl_num = int(result.floor.Floor_number)
+        self._floor_defs[fl_num] = result
+
+        if fl_num < len(self.building.Floor_list):
+            self.building.Floor_list[fl_num] = result.floor
+            # odśwież cache w Building (bo replace nie wywołuje __get_*):
+            self.building.router_possible = self.building._Building__get_possible_router_positions()
+            self.building.points_to_calculate = self.building._Building__get_points_to_calculate()
+        else:
+            self.building.add_floor(result.floor)
+
+        self._refresh_floor_list()
+        self.list_floors.setCurrentRow(fl_num)
 
     def run_optimization(self):
        pass #TODO
@@ -173,15 +206,66 @@ class MainWindow(QMainWindow):
 
     def show_main_page(self):
         self.stack.setCurrentIndex(0)
+    
+    def _refresh_floor_list(self):
+        self.list_floors.blockSignals(True)
+        self.list_floors.clear()
+        for i in range(len(self.building.Floor_list)):
+            self.list_floors.addItem(f"Piętro {i}")
+        self.list_floors.blockSignals(False)
+
+    def _on_floor_list_clicked(self, item):
+        text = item.text()  # "Piętro X"
+        floor_number = int(text.split()[-1])
+
+        # preferuj zapisane definicje z GUI (pewne nazwy macierzy)
+        if floor_number in self._floor_defs:
+            res = self._floor_defs[floor_number]
+            self.floor_define.load_floor(
+                floor_number=floor_number,
+                wall_matrix=res.wall_matrix,
+                router_matrix=res.router_matrix,
+                cover_matrix=res.cover_matrix,
+                thickness=res.floor.Floor_thickness,
+            )
+        else:
+            fl = self.building.Floor_list[floor_number]
+            self.floor_define.load_floor(
+                floor_number=floor_number,
+                wall_matrix=fl.wall_matrix,
+                router_matrix=fl.router,
+                cover_matrix=fl.cover,
+                thickness=fl.Floor_thickness,
+            )
+
+        self.show_definition_page()
+
 
     def add_floor(self):
-        dialog = FloorSizeDialog(self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            width, height = dialog.values()
-            print(f"Dodaj piętro o rozmiarze {width}x{height}")
+        if len(self.building.Floor_list) == 0:
+            dialog = FloorSizeDialog(self)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            width, length, height = dialog.values()
+            self.config.floor_width = width
+            self.config.floor_length = length
+            self.config.floor_heights = float(height)
+        else:
+            width = self.config.floor_width
+            length = self.config.floor_length
 
+        floor_number = len(self.building.Floor_list)
+        self.floor_define.start_new_floor(
+            floor_number=floor_number,
+            width=width,
+            length=length,
+            thickness=0.5,
+        )
+        self.show_definition_page()
+        self._refresh_floor_list()
 
 # --- DIALOG DO DEFINIOWANIA ROZMIARÓW PIĘTRA ---
+# funkcja wykorzystywana w zasadzie raz przy dodawanaiu pierwszego piętra
 class FloorSizeDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -198,27 +282,48 @@ class FloorSizeDialog(QDialog):
         layout = QFormLayout(self)
 
         self.spin_width = QSpinBox()
-        self.spin_width.setRange(1, 1000)
-        self.spin_width.setValue(20)
+        self.spin_width.setRange(1, 100)
+        self.spin_width.setValue(self.parent().config.floor_width)
 
-        self.spin_height = QSpinBox()
-        self.spin_height.setRange(1, 1000)
-        self.spin_height.setValue(20)
-
-        layout.addRow("Szerokość (W):", self.spin_width)
-        layout.addRow("Wysokość (H):", self.spin_height)
+        self.spin_length = QSpinBox()
+        self.spin_length.setRange(1, 100)
+        self.spin_length.setValue(self.parent().config.floor_length)
+        
+        self.spin_height = QDoubleSpinBox()
+        self.spin_height.setRange(0.0, 10.0)
+        self.spin_height.setValue(self.parent().config.floor_heights) # Domyślna wartość z pliku
+        self.spin_height.setSingleStep(0.5)
+  
+        layout.addRow("Szerokość (m):", self.spin_width)
+        layout.addRow("Długość (m):", self.spin_length)
+        layout.addRow("Wysokość (m):", self.spin_height)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok |
                                    QDialogButtonBox.StandardButton.Cancel)
+        
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-    def values(self) -> tuple[int, int]:
-        return self.spin_width.value(), self.spin_height.value()
+    def values(self) -> tuple[int, int, int]:
+        return self.spin_width.value(), self.spin_length.value(), self.spin_height.value()
 
-def create_empty_building(floor_heights: float = 3.0) -> bk.Building:
-    return Building(Floors = [], Floor_heights=floor_heights, available_routers=[])
+
+def create_empty_building(config: SimulationConfig) -> bk.Building:
+    # funkcja pomocniczna inicjalizująca obiekt Building z pusty
+    return bk.Building(Floors = [], Floor_heights=config.floor_heights, available_routers=[], config=config)
+
+
+def create_empty_floor(width: int, length: int, fl_num: int, config: SimulationConfig) -> Floor:
+    # funkcja pomocniczna tworząca puste piętro o zadanych rozmiarach
+
+    return Floor(
+        wall_matrix = np.zeros((length, width), dtype=float) ,
+        router_matrix = np.zeros((length, width), dtype=bool),
+        cover_matrix = np.zeros((length, width), dtype=int),
+        Floor_number = fl_num, # to i tak nie jest używane nigdy 
+        Floor_thickness = config.floor_heights
+        )
 
 
 if __name__ == "__main__":

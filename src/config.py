@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from enums import TabuStrategy, AspirationStrategy, InitialSolutionStrategy, LocalChangeStrategy
+from .enums import TabuStrategy, AspirationStrategy, InitialSolutionStrategy, LocalChangeStrategy
 
 @dataclass
 class SimulationConfig:
@@ -24,3 +24,6 @@ class SimulationConfig:
     router_range: int = 10
     floor_damping: float = 2.0                  # Tłumienie stropu (fizyka)
     min_distance: float = 4.0                   # Minimalna odległość między ruterami
+    floor_heights: float = 3.0                  # Wysokość piętra domyślna (metry)
+    floor_width: int = 20                       # Szerokość piętra (metry)
+    floor_length: int = 20                      # Długość piętra (metry)

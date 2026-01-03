@@ -2,7 +2,7 @@ from __future__ import annotations # To rozwiązuje problem kolejności klas
 import numpy as np
 from typing import List
 from math import floor
-from config import SimulationConfig
+from .config import SimulationConfig
 
 
 class Point:
@@ -51,7 +51,7 @@ class Floor:
         ):
             raise ValueError("Wszystkie macierze muszą mieć ten sam rozmiar.")
 
-        self.wall = wall_matrix
+        self.wall_matrix = wall_matrix
         self.router = router_matrix
         self.cover = cover_matrix
         self.Floor_number = Floor_number  # to w sumie nie jest potrzebn
@@ -63,8 +63,12 @@ class Building:
     # zawiera listę pięter
 
     def __init__(
-        self, Floors: list[Floor], Floor_heights: int, available_routers: list[Router], config: SimulationConfig
-    ):
+        self, Floors: list[Floor], 
+        Floor_heights: float, 
+        available_routers: list[Router], 
+        config: SimulationConfig
+    ):  
+
         self.Floor_list = Floors
         self.router_possible = (
             self.__get_possible_router_positions()
@@ -72,7 +76,7 @@ class Building:
         self.points_to_calculate = (
             self.__get_points_to_calculate()
         )  # od razu buduje liste punktów do obliczenia zasięgu dla łatwiejszego dostępu
-        self.Floor_heights = Floor_heights
+        self.Floor_heights = config.floor_heights # wysokość piętra w metrach -> parametr Floor_heights z configu bierzemy, nie ma potrzeby dawać go ososbno
         self.available_routers = available_routers # TODO co to jest XD?
         self.config = config
         

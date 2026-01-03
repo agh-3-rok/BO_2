@@ -1,9 +1,9 @@
 import numpy as np
 from typing import List, Tuple, Optional, Any
 import random
-from data_matrices import Building, Router
-from config import SimulationConfig
-from enums import TabuStrategy, AspirationStrategy, InitialSolutionStrategy, LocalChangeStrategy
+from .data_matrices import Building, Router
+from .config import SimulationConfig
+from .enums import TabuStrategy, AspirationStrategy, InitialSolutionStrategy, LocalChangeStrategy
 
 class TabuSearch:
     """

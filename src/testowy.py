@@ -1,95 +1,172 @@
 import numpy as np
-import data_matrices
-import algorithms
+import matplotlib.pyplot as plt
+import copy
 
+# Upewnij się, że pliki data_matrices.py i optimizer.py są w tym samym folderze
+from data_matrices import Building, Floor, Router
+from algorithms import TabuSearch, TabuStrategy, AspirationStrategy
 
+# --- KONFIGURACJA ---
+MAP_SIZE = 30           # Rozmiar mapy (30x30 kratek)
+NUM_FLOORS = 2          # Liczba pięter
+NUM_ROUTERS = 4         # Liczba routerów
+ROUTER_POWER = 20       # Moc routera
+ROUTER_RANGE = 10       # Promień zasięgu
+MIN_DIST = 3.0          # Min. dystans między routerami
+MAX_ITER = 120          # Liczba iteracji na test
 
-wall_matrix = np.array(
-    [
-        [5, 5, 5, 5, 5, 5, 5, 5],
-        [5, 0, 0, 0, 0, 0, 0, 5],
-        [5, 0, 0, 3, 0, 0, 0, 5],
-        [5, 0, 0, 3, 3, 3, 3, 5],
-        [5, 0, 0, 0, 0, 0, 0, 5],
-        [5, 0, 0, 0, 0, 0, 0, 5],
-        [5, 0, 0, 0, 0, 0, 0, 5],
-        [5, 5, 5, 5, 5, 5, 5, 5],
-    ],
-    dtype=float,
-)
+def create_test_environment():
+    """
+    Tworzy budynek z 2 piętrami o różnych priorytetach.
+    Piętro 0: Korytarze (mało ważne).
+    Piętro 1: Biura (bardzo ważne).
+    """
+    floors = []
+    
+    for f in range(NUM_FLOORS):
+        # 1. Ściany (puste pudełko + słupek na środku)
+        wall_matrix = np.zeros((MAP_SIZE, MAP_SIZE), dtype=float)
+        # Ściany zewnętrzne
+        wall_matrix[0, :] = 5.0
+        wall_matrix[-1, :] = 5.0
+        wall_matrix[:, 0] = 5.0
+        wall_matrix[:, -1] = 5.0
+        # Przeszkoda na środku
+        mid = MAP_SIZE // 2
+        wall_matrix[mid-2:mid+2, mid-2:mid+2] = 5.0
+        
+        # 2. Priorytety (Importance)
+        cover_matrix = np.zeros((MAP_SIZE, MAP_SIZE), dtype=int)
+        router_matrix = np.ones((MAP_SIZE, MAP_SIZE), dtype=int)
+        
+        if f == 0:
+            # Parter - priorytet 5 (mały)
+            cover_matrix.fill(5)
+        else:
+            # Piętro 1 - priorytet 50 (duży) -> Routery powinny uciekać tutaj!
+            cover_matrix.fill(50) 
+            
+            # Dodatkowo super ważny pokój w rogu piętra 1
+            cover_matrix[5:10, 5:10] = 200
 
-router_matrix = np.array(
-    [
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 1, 1, 0, 0, 0, 1, 0],
-        [0, 0, 0, 0, 0, 1, 0, 0],
-        [0, 1, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 1, 0, 0, 0, 0],
-        [0, 0, 1, 0, 1, 0, 1, 0],
-        [0, 1, 0, 1, 1, 0, 1, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-    ]
-)
+        floors.append(Floor(wall_matrix, router_matrix, cover_matrix, Floor_number=f, Floor_thickness=0.5))
 
-cover_matrix = np.array(
-    [
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 3, 3, 0, 3, 3, 5, 0],
-        [0, 3, 3, 0, 4, 4, 5, 0],
-        [0, 3, 3, 0, 0, 0, 0, 0],
-        [0, 4, 4, 3, 3, 4, 4, 0],
-        [0, 5, 4, 3, 3, 5, 5, 0],
-        [0, 5, 4, 3, 3, 5, 5, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-    ],
-    dtype=int,
-)
+    building = Building(floors, Floor_heights=3.0, available_routers=[])
+    routers = [Router(ROUTER_POWER, 20, ROUTER_RANGE) for _ in range(NUM_ROUTERS)]
+    building.available_routers = routers
+    
+    return building, routers
 
+def plot_results(building, routers, title):
+    """Wizualizacja wyników dla wszystkich pięter."""
+    fig, axes = plt.subplots(1, NUM_FLOORS, figsize=(12, 5))
+    if NUM_FLOORS == 1: axes = [axes]
+    
+    fig.suptitle(title, fontsize=14, fontweight='bold')
+    
+    for f_idx, ax in enumerate(axes):
+        # Pobierz mapę sygnału (uwzględnia 3D)
+        signal_map = building.agregation_func_for_floor(f_idx, routers)
+        floor_obj = building.Floor_list[f_idx]
+        
+        # Rysuj sygnał
+        im = ax.imshow(signal_map, cmap='plasma', vmin=0, vmax=100) # vmax dostosuj do skali
+        
+        # Rysuj ściany
+        ax.imshow(floor_obj.wall, cmap='Greys', alpha=0.3)
+        
+        # Rysuj routery
+        for r in routers:
+            if r.position:
+                py, px = r.position.y, r.position.x
+                if r.position.Floor_number == f_idx:
+                    # Router na tym piętrze
+                    ax.scatter(py, px, c='lime', marker='P', s=150, edgecolors='black', label='Router Here')
+                else:
+                    # Router na innym piętrze (Ghost)
+                    ax.scatter(py, px, c='gray', marker='x', s=50, alpha=0.5, label='Router Other Floor')
+                    
+        ax.set_title(f"Floor {f_idx} (Max Priority: {np.max(floor_obj.cover)})")
+        ax.invert_yaxis()
 
-pietro = data_matrices.Floor(
-    wall_matrix=wall_matrix,
-    router_matrix=router_matrix,
-    cover_matrix=cover_matrix,
-    Floor_number=1,
-    Floor_thickness=0.3,
-)
+    plt.tight_layout()
+    plt.show()
 
-# Dostępne routery do wykorzystania
-available_routers = [
-    data_matrices.Router(Power=10, Max_users=5, Max_range=5),
-    data_matrices.Router(Power=10, Max_users=5, Max_range=5),
-    data_matrices.Router(Power=10, Max_users=5, Max_range=5),
-]
+def run_scenario(name, building, routers, t_strat, a_strat):
+    """Uruchamia pojedynczy scenariusz testowy."""
+    print(f"\n>>> TEST: {name}")
+    print(f"    Tabu Strategy: {t_strat.name}")
+    print(f"    Aspi Strategy: {a_strat.name}")
+    
+    # RESET ROUTERÓW (Bardzo ważne!)
+    for r in routers:
+        r.position = None
+        r.coverage_layers = {}
+    
+    # Inicjalizacja Optymalizatora
+    optimizer = TabuSearch(
+        building=building,
+        available_routers=routers,
+        tabu_length=15,
+        max_iterations=MAX_ITER,
+        min_distance=MIN_DIST,
+        tabu_strategy=t_strat,          # <--- Wybór strategii
+        aspiration_strategy=a_strat     # <--- Wybór aspiracji
+    )
+    
+    # Uruchomienie
+    # Wymuszamy start losowy, żeby mieć punkt odniesienia
+    optimizer.weighted_random_initial_solution()
+    start_val = optimizer.best_value
+    
+    # Fix po ręcznym inicie
+    optimizer.current_solution = list(optimizer.best_solution) 
+    
+    # Run
+    best_sol, best_val, history, asp_cnt = optimizer.run()
+    
+    gain = ((best_val - start_val) / start_val * 100) if start_val > 0 else 0
+    
+    print("-" * 50)
+    print(f"    Start Score: {start_val:.1f}")
+    print(f"    End Score:   {best_val:.1f}")
+    print(f"    Gain:        {gain:+.1f}%")
+    print(f"    Aspirations: {asp_cnt} (Ile razy złamano Tabu)")
+    print("-" * 50)
+    
+    return best_val, asp_cnt, history
 
-budynek = data_matrices.Building(
-    Floors=[pietro, pietro, pietro],
-    Floor_heights=2.5,
-    available_routers=available_routers
-)
+# --- MAIN ---
+if __name__ == "__main__":
+    building, routers = create_test_environment()
+    
+    # SCENARIUSZ 1: Klasyczny (Konserwatywny)
+    # Blokujemy router po ID, aspiracja tylko przy rekordzie świata
+    val1, asp1, hist1 = run_scenario(
+        "CLASSIC SETUP", 
+        building, routers,
+        TabuStrategy.BLOCK_ROUTER_ID, 
+        AspirationStrategy.GLOBAL_BEST
+    )
+    plot_results(building, routers, "Classic Results (Conservative)")
 
-# Tworzenie routerów w poszczególnych pozycjach
-ruter1 = data_matrices.Router(Power=10, Max_users=5, Max_range=5)
-ruter1.position = data_matrices.Point(1, 1, 1)
-ruter1.calculate_coverage(building=budynek)
-
-ruter2 = data_matrices.Router(Power=10, Max_users=5, Max_range=5)
-ruter2.position = data_matrices.Point(6, 1, 0)
-ruter2.calculate_coverage(building=budynek)
-
-ruter3 = data_matrices.Router(Power=10, Max_users=5, Max_range=5)
-ruter3.position = data_matrices.Point(6, 6, 0)
-ruter3.calculate_coverage(building=budynek)
-
-# print(ruter1.coverage_layers[-1])
-# print(ruter1.coverage_layers[0])
-# print(ruter1.coverage_layers[1])
-
-global_map = budynek.agregation_func_for_floor(floor_idx=0, routers=[ruter1, ruter2, ruter3])
-
-tabu = algorithms.TabuSearch(available_routers=[ruter1, ruter2, ruter3], building=budynek, max_iterations=500, tabu_strategy=algorithms.TabuStrategy.BLOCK_AREA_RADIUS, aspiration_strategy=algorithms.AspirationStrategy.GLOBAL_BEST)
-
-tabu.initial_solution()
-print(tabu.evaluate_solution())
-
-tabu.weighted_random_initial_solution()
-print(tabu.evaluate_solution())
+    # SCENARIUSZ 2: Nowoczesny (Agresywny)
+    # Blokujemy obszar (radius), aspiracja przy lokalnym zysku routera
+    val2, asp2, hist2 = run_scenario(
+        "MODERN SETUP", 
+        building, routers,
+        TabuStrategy.BLOCK_AREA_RADIUS, 
+        AspirationStrategy.LOCAL_GAIN
+    )
+    plot_results(building, routers, "Modern Results (New Strategies)")
+    
+    # Porównanie wykresów zbieżności
+    plt.figure(figsize=(10, 6))
+    plt.plot(hist1['best_values'], label=f'Classic (Asp={asp1})', linestyle='--')
+    plt.plot(hist2['best_values'], label=f'Modern (Asp={asp2})', linewidth=2)
+    plt.title("Optimization Convergence Comparison")
+    plt.xlabel("Iteration")
+    plt.ylabel("Total Score")
+    plt.legend()
+    plt.grid(True)
+    plt.show()

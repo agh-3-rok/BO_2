@@ -367,11 +367,11 @@ class TabuSearch:
             # sprawdzenie w tabu: dwie możliwe logiki
             is_tabu = False
             
-            if self.strategy == TabuStrategy.BLOCK_ROUTER_ID:
+            if self.tabu_strategy == TabuStrategy.BLOCK_ROUTER_ID:
                 # Strategia - czy ten router jest na liście zablokowanych
                 is_tabu = r_id in self.tabu_list
                 
-            elif self.strategy == TabuStrategy.BLOCK_AREA_RADIUS:
+            elif self.tabu_strategy == TabuStrategy.BLOCK_AREA_RADIUS:
                 # Strategia - czy nowe miejsce jest w pobliżu starego miejsca
                 target_point = self.building.router_possible[new_p]
                 
@@ -401,11 +401,11 @@ class TabuSearch:
             
             if accept:
                 # akutalizacja listy tabu w zależności od strategii
-                if self.strategy == TabuStrategy.BLOCK_ROUTER_ID:
+                if self.tabu_strategy == TabuStrategy.BLOCK_ROUTER_ID:
                     # blokujemy ID routera
                     self.tabu_list.append(r_id)
                     
-                elif self.strategy == TabuStrategy.BLOCK_AREA_RADIUS:
+                elif self.tabu_strategy == TabuStrategy.BLOCK_AREA_RADIUS:
                     # Blokujemy fizyczny punkt który właśnie opuściliśmy
                     old_point_obj = self.building.router_possible[old_p]
                     self.tabu_list.append(old_point_obj)

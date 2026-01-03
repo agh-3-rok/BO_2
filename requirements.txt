@@ -1,4 +1,5 @@
-TUTAJ BEDZIE NAPISANE JAKIE IMPORTY TRZEBA SOBIE ZROBIĆ
-
-numpy = 2.0.1
-pytest = 7.4.0
+   python
+   numpy==2.0.1
+   pytest==7.4.0
+   PyQt6
+   matplotlib==3.8.0

@@ -1,7 +1,7 @@
 import numpy as np
 from typing import List, Tuple, Optional
 import random
-from data_matrices import Building, Router
+from .data_matrices import Building, Router
 
 class TabuSearch:
     """

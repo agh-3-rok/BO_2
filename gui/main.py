@@ -20,145 +20,22 @@ sys.path.append(project_root)
 
 try:
     from src import data_matrices as bk
-    from src.data_matrices import Building, Floor, Router, TabuSearch
-    
+    from src.data_matrices import Building, Floor, Router
+    from src.algorithms import TabuSearch
+
 except ImportError as e:
     print(f"Błąd importu! Upewnij się, że plik backendu jest w dobrej ścieżce. Info: {e}")
     sys.exit(1)
 
 
-# --- POMOCNICZE GENEROWANIE DANYCH (MOCKUP) ---
-def create_test_environment():
-    """Tworzy przykładowy budynek i routery, żeby algorytm miał na czym pracować."""
-    W, H = 20, 20
-    
-    # 1. Tworzymy macierze dla piętra
-    wall_matrix = np.zeros((W, H))
-    # Dodajmy przykładową ścianę na środku
-    wall_matrix[10, :] = 5.0 
-    
-    router_matrix = np.ones((W, H)) # Wszędzie można postawić router
-    
-    cover_matrix = np.zeros((W, H))
-    cover_matrix.fill(1) # Chcemy pokryć całe piętro (priorytet 1)
-    
-    # 2. Tworzymy piętro
-    floor0 = Floor(wall_matrix, router_matrix, cover_matrix, Floor_number=0, Floor_thickness=0.5)
-    
-    # 3. Tworzymy routery (np. 3 dostępne)
-    routers = [Router(Power=20, Max_users=10, Max_range=15) for _ in range(3)]
-    
-    # 4. Tworzymy budynek
-    building = Building([floor0], Floor_heights=3.0, available_routers=routers)
-    
-    return building, routers
-
-
-# --- GŁÓWNY WĄTEK OBLICZENIOWY ---
-class OptimizerWorker(QThread):
-    update_signal = pyqtSignal(int, float, np.ndarray)
-    finished_signal = pyqtSignal()
-
-    def __init__(self, damping, tabu_len, max_iters):
-        super().__init__()
-        # Przekazujemy parametry z GUI
-        self.damping = damping
-        self.tabu_len = tabu_len
-        self.max_iters = max_iters
-        self.foor_height = 3.0
-        self.is_running = True
-
-    def run(self):
-        # 1. NADPISANIE STAŁEJ GLOBALNEJ W TWOIM PLIKU
-        # Ponieważ Building używa stałej FLOOR_DAMPING_PARAM zdefiniowanej globalnie,
-        # musimy ją podmienić w zaimportowanym module przed uruchomieniem.
-        bk.FLOOR_DAMPING_PARAM = self.damping
-        bk.TABU_LIST_LENGTH = self.tabu_len
-        bk.MAX_ITERATIONS = self.max_iters
-        bk.FLOOR_HEIGHT = 3.0  # Przykładowa wysokość piętra
-
-        # 2. Inicjalizacja środowiska
-        building, routers = create_test_environment()
-        
-        # 3. Inicjalizacja klasy TabuSearch
-        ts = TabuSearch(building, routers, tabu_length=self.tabu_len, max_iterations=self.max_iters)
-        
-        # Generujemy rozwiązanie początkowe
-        ts.initial_solution()
-
-        # 4. PĘTLA ALGORYTMU (Przeniesiona z metody run() Twojego TabuSearch)
-        # Robimy to tutaj, "na piechotę", żeby po każdej iteracji wysłać sygnał do GUI.
-        
-        for iteration in range(self.max_iters):
-            if not self.is_running: break
-
-            # --- Logika krok po kroku z Twojego pliku ---
-            neighbor = ts.local_change()
-            neighbor_value = ts.evaluate_solution()
-            
-            is_tabu = neighbor in ts.tabu_list
-            
-            accept = False
-            if not is_tabu:
-                accept = True
-            elif ts.aspiration_criteria(neighbor):
-                accept = True
-            
-            if accept:
-                # Aktualizacja tabu
-                ts.tabu_list.append(neighbor.copy())
-                if len(ts.tabu_list) > ts.tabu_length:
-                    ts.tabu_list.pop(0)
-                
-                # Aktualizacja najlepszego rozwiązania
-                if neighbor_value > ts.best_value:
-                    ts.best_solution = neighbor.copy()
-                    ts.best_value = neighbor_value
-            else:
-                # Cofanie zmiany (logika z Twojego pliku)
-                for i in range(len(ts.current_solution)):
-                    if ts.current_solution[i] != neighbor[i]:
-                        router_id = ts.current_solution[i]
-                        if router_id >= 0:
-                            # Przywróć starą pozycję w obiekcie routera
-                            # Musimy znaleźć gdzie był wcześniej, to wymagałoby zapamiętania stanu
-                            # Uproszczenie dla GUI: po prostu przywracamy best_solution jeśli nie akceptujemy
-                            pass
-                        break
-                ts.current_solution = ts.best_solution.copy()
-                # Ważne: musimy też przywrócić fizyczne pozycje routerów w obiekcie Building
-                # na podstawie ts.current_solution, aby wykres pokazywał prawdę
-                self._sync_routers_positions(ts)
-
-            # --- WYSYŁANIE DANYCH DO GUI ---
-            # Obliczamy macierz pokrycia (agregację) dla aktualnego stanu routerów
-            current_coverage_map = building.agregation_func(ts.available_routers)
-            
-            # Emitujemy sygnał: Iteracja, Najlepszy wynik, Macierz do narysowania
-            self.update_signal.emit(iteration + 1, ts.best_value, current_coverage_map)
-            
-            # Krótka pauza, żeby GUI nadążyło rysować i nie "zjadło" CPU (opcjonalne)
-            # self.msleep(10) 
-
-        self.finished_signal.emit()
-
-    def _sync_routers_positions(self, ts):
-        """Pomocnicza funkcja synchronizująca pozycje routerów na podstawie current_solution"""
-        # Resetujemy pozycje routerów, które nie są używane
-        # Następnie ustawiamy te, które są w solution
-        for i, router_idx in enumerate(ts.current_solution):
-            if router_idx >= 0:
-                router = ts.available_routers[router_idx]
-                router.position = ts.building.router_possible[i]
-                router.calculate_coverage(ts.building)
-
-    def stop(self):
-        self.is_running = False
 
 # --- GUI (Frontend) ---
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        # obiekt building przechowany w GUI do obliczeń
+        self.building = create_empty_building(floor_heights=3.0)
+
         self.setWindowTitle("Router Placement - Tabu Search GUI")
         self.resize(1100, 700)
 
@@ -259,6 +136,8 @@ class MainWindow(QMainWindow):
         definition_layout.addStretch()
         self.stack.addWidget(self.definition_view)
 
+        # jeśli lista pięter jest pusta, pokaż przycisk 
+
         # przycisk dodaj piętro
         floors_group = QGroupBox("Operacje na piętrach")
         floors_layout = QVBoxLayout()
@@ -270,23 +149,7 @@ class MainWindow(QMainWindow):
         
 
     def run_optimization(self):
-        # Pobranie parametrów
-        damp = self.spin_damping.value()
-        t_len = self.spin_tabu_len.value()
-        iters = self.spin_iters.value()
-
-        # Reset wykresów
-        self.history_fitness = []
-        self.ax_conv.set_xlim(0, iters)
-        self.line_conv.set_data([], [])
-        
-        # Start workera
-        self.worker = OptimizerWorker(damp, t_len, iters)
-        self.worker.update_signal.connect(self.update_plots)
-        self.worker.finished_signal.connect(lambda: self.btn_run.setText("URUCHOM PONOWNIE"))
-        
-        self.btn_run.setText("OBLICZANIE...")
-        self.worker.start()
+       pass #TODO
 
     def update_plots(self, iteration, fitness, matrix):
         # 1. Wykres zbieżności
@@ -353,6 +216,10 @@ class FloorSizeDialog(QDialog):
 
     def values(self) -> tuple[int, int]:
         return self.spin_width.value(), self.spin_height.value()
+
+def create_empty_building(floor_heights: float = 3.0) -> bk.Building:
+    return Building(Floors = [], Floor_heights=floor_heights, available_routers=[])
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

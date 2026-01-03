@@ -76,7 +76,6 @@ class Building:
         self.Floor_heights = Floor_heights
         self.available_routers = available_routers # TODO co to jest XD?
         
-
     def add_floor(self, floor: Floor):
         self.Floor_list.append(floor)
         # aktualizujemy listę możliwych pozycji routerów i punktów do obliczenia
@@ -465,7 +464,7 @@ class Building:
         
         for router in self.available_routers:
             # Jeśli router nie jest ustawiony, jego użyteczność to 0
-            if router.position is None or router.coverage_grid is None:
+            if router.position is None or router.coverage_layers is None:
                 scores.append(0.0)
                 continue
                 

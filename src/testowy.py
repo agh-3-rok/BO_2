@@ -1,95 +1,114 @@
 import numpy as np
-import data_matrices
-import algorithms
+import matplotlib.pyplot as plt
+from data_matrices import Building, Floor, Router
+from algorithms import TabuSearch, TabuStrategy, AspirationStrategy, InitialSolutionStrategy, LocalChangeStrategy
 
+# --- KONFIGURACJA TESTU ---
+NUM_RUNS = 20           # Liczba powtórzeń
+MAX_ITER = 100          
+MAP_SIZE = 30
+NUM_ROUTERS = 5
+ROUTER_RANGE = 10
 
+def create_environment():
+    """Tworzy środowisko testowe (2 piętra)."""
+    floors = []
+    for f in range(2):
+        wall = np.zeros((MAP_SIZE, MAP_SIZE))
+        wall[10:20, 10:20] = 5.0 
+        
+        cover = np.zeros((MAP_SIZE, MAP_SIZE), dtype=int)
+        if f == 0: cover.fill(5)   
+        else:      cover.fill(50)  
+        
+        router_matrix = np.ones((MAP_SIZE, MAP_SIZE), dtype=int)
+        floors.append(Floor(wall, router_matrix, cover, f, 0.5))
+        
+    building = Building(floors, 3.0, [])
+    routers = [Router(20, 20, ROUTER_RANGE) for _ in range(NUM_ROUTERS)]
+    building.available_routers = routers
+    return building, routers
 
-wall_matrix = np.array(
-    [
-        [5, 5, 5, 5, 5, 5, 5, 5],
-        [5, 0, 0, 0, 0, 0, 0, 5],
-        [5, 0, 0, 3, 0, 0, 0, 5],
-        [5, 0, 0, 3, 3, 3, 3, 5],
-        [5, 0, 0, 0, 0, 0, 0, 5],
-        [5, 0, 0, 0, 0, 0, 0, 5],
-        [5, 0, 0, 0, 0, 0, 0, 5],
-        [5, 5, 5, 5, 5, 5, 5, 5],
-    ],
-    dtype=float,
-)
-
-router_matrix = np.array(
-    [
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 1, 1, 0, 0, 0, 1, 0],
-        [0, 0, 0, 0, 0, 1, 0, 0],
-        [0, 1, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 1, 0, 0, 0, 0],
-        [0, 0, 1, 0, 1, 0, 1, 0],
-        [0, 1, 0, 1, 1, 0, 1, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
+def run_benchmark():
+    # Definicja scenariuszy wykorzystująca NOWE strategie
+    scenarios = [
+        {
+            "name": "1. Blind Random",
+            "tabu_strat": TabuStrategy.BLOCK_ROUTER_ID,
+            "asp_strat": AspirationStrategy.GLOBAL_BEST,
+            "init_strat": InitialSolutionStrategy.RANDOM_INITIALIZATION,
+            "move_strat": LocalChangeStrategy.RANDOM_LOCAL_CHANGE,
+            "color": "red"
+        },
+        {
+            "name": "2. Smart Start Only",
+            "tabu_strat": TabuStrategy.BLOCK_ROUTER_ID,
+            "asp_strat": AspirationStrategy.GLOBAL_BEST,
+            "init_strat": InitialSolutionStrategy.WEIGHTED_RANDOM_INITIALIZATION,
+            "move_strat": LocalChangeStrategy.RANDOM_LOCAL_CHANGE, # Ruchy nadal losowe
+            "color": "orange"
+        },
+        {
+            "name": "3. Full Smart (Classic)",
+            "tabu_strat": TabuStrategy.BLOCK_ROUTER_ID,
+            "asp_strat": AspirationStrategy.GLOBAL_BEST,
+            "init_strat": InitialSolutionStrategy.WEIGHTED_RANDOM_INITIALIZATION,
+            "move_strat": LocalChangeStrategy.SMART_LOCAL_CHANGE, # Ruchy celowane w najgorsze routery
+            "color": "green"
+        }
     ]
-)
 
-cover_matrix = np.array(
-    [
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 3, 3, 0, 3, 3, 5, 0],
-        [0, 3, 3, 0, 4, 4, 5, 0],
-        [0, 3, 3, 0, 0, 0, 0, 0],
-        [0, 4, 4, 3, 3, 4, 4, 0],
-        [0, 5, 4, 3, 3, 5, 5, 0],
-        [0, 5, 4, 3, 3, 5, 5, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-    ],
-    dtype=int,
-)
+    results_data = {s["name"]: {"scores": []} for s in scenarios}
 
+    print(f"Rozpoczynam benchmark ({NUM_RUNS} prób)...")
+    print("=" * 70)
 
-pietro = data_matrices.Floor(
-    wall_matrix=wall_matrix,
-    router_matrix=router_matrix,
-    cover_matrix=cover_matrix,
-    Floor_number=1,
-    Floor_thickness=0.3,
-)
+    for s_idx, sc in enumerate(scenarios):
+        print(f"Test: {sc['name']}...", end="", flush=True)
+        
+        for i in range(NUM_RUNS):
+            building, routers = create_environment()
+            
+            # Inicjalizacja z nowymi parametrami
+            opt = TabuSearch(
+                building=building,
+                available_routers=routers,
+                tabu_length=10,
+                max_iterations=MAX_ITER,
+                min_distance=3.0,
+                tabu_strategy=sc['tabu_strat'],
+                aspiration_strategy=sc['asp_strat'],
+                init_strategy=sc['init_strat'],        # <--- Wybór inicjalizacji
+                local_change_strategy=sc['move_strat'] # <--- Wybór ruchu
+            )
+            
+            # Uruchomienie (run sam wywoła odpowiedni init wewnątrz)
+            opt.run()
+            
+            results_data[sc["name"]]["scores"].append(opt.best_value)
+            
+            if i % 5 == 0: print(".", end="", flush=True)
+            
+        print(" Gotowe!")
 
-# Dostępne routery do wykorzystania
-available_routers = [
-    data_matrices.Router(Power=10, Max_users=5, Max_range=5),
-    data_matrices.Router(Power=10, Max_users=5, Max_range=5),
-    data_matrices.Router(Power=10, Max_users=5, Max_range=5),
-]
+    # --- WYKRES ---
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+    
+    score_lists = [results_data[s["name"]]["scores"] for s in scenarios]
+    names = [s["name"] for s in scenarios]
+    colors = [s["color"] for s in scenarios]
+    
+    bplot = ax1.boxplot(score_lists, patch_artist=True, labels=names)
+    
+    for patch, color in zip(bplot['boxes'], colors):
+        patch.set_facecolor(color)
+        patch.set_alpha(0.6)
+        
+    ax1.set_title(f"Wpływ Strategii Inicjalizacji i Ruchu na Wynik")
+    ax1.set_ylabel("Funkcja Celu")
+    ax1.grid(True, linestyle='--', alpha=0.7)
+    
+    plt.show()
 
-budynek = data_matrices.Building(
-    Floors=[pietro, pietro, pietro],
-    Floor_heights=2.5,
-    available_routers=available_routers
-)
-
-# Tworzenie routerów w poszczególnych pozycjach
-ruter1 = data_matrices.Router(Power=10, Max_users=5, Max_range=5)
-ruter1.position = data_matrices.Point(1, 1, 1)
-ruter1.calculate_coverage(building=budynek)
-
-ruter2 = data_matrices.Router(Power=10, Max_users=5, Max_range=5)
-ruter2.position = data_matrices.Point(6, 1, 0)
-ruter2.calculate_coverage(building=budynek)
-
-ruter3 = data_matrices.Router(Power=10, Max_users=5, Max_range=5)
-ruter3.position = data_matrices.Point(6, 6, 0)
-ruter3.calculate_coverage(building=budynek)
-
-# print(ruter1.coverage_layers[-1])
-# print(ruter1.coverage_layers[0])
-# print(ruter1.coverage_layers[1])
-
-global_map = budynek.agregation_func_for_floor(floor_idx=0, routers=[ruter1, ruter2, ruter3])
-
-tabu = algorithms.TabuSearch(available_routers=[ruter1, ruter2, ruter3], building=budynek, max_iterations=500)
-
-tabu.initial_solution()
-print(tabu.evaluate_solution())
-
-tabu.weighted_random_initial_solution()
-print(tabu.evaluate_solution())
+if __name__ == "__main__":
+    run_benchmark()

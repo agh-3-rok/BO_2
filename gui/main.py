@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QListWidget, QFileDialog,
     QMessageBox, QLabel, QComboBox
 )
-
+m
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -554,8 +554,11 @@ class MainWindow(QMainWindow):
         # rysowanie ze wszystkiego na końcu
         iters = [int(x) for x in history.get("iterations", [])]
 
-        best_goal = [float(x) for x in history.get("best_values", [])]
-        curr_goal = [float(x) for x in history.get("current_values", [])]
+        best_goal = [float(x) for x in history.get("best_goal", [])]
+        curr_goal = [float(x) for x in history.get("current_goal", [])]
+
+        # best_values = [float(x) for x in history.get("best_goal", history.get("best_values", []))]
+        # curr_values = [float(x) for x in history.get("current_goal", history.get("current_values", []))]
 
         best_ratio = [float(x) for x in history.get("best_ratio", [])]
         curr_ratio = [float(x) for x in history.get("current_ratio", [])]

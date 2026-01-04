@@ -61,6 +61,8 @@ class TabuSearch:
             'best_values': [],
             'current_values': [],
 
+            "current_goal": [],
+            "best_goal": [],
 
             'current_ratio': [],
             'best_ratio': [],
@@ -69,7 +71,10 @@ class TabuSearch:
         }
 
         self._eval_last_ratio = 0.0
+        self._eval_last_goal = 0.0
         self._best_ratio = 0.0
+        self._best_goal = 0.0
+
         self.tabu_reject_cnt = 0
 
         self.high_priority_indices = self._get_high_priority_indices()
@@ -102,6 +107,9 @@ class TabuSearch:
         self.current_solution = solution
         self.best_solution = solution.copy()
         self.best_value = self.evaluate_solution()
+
+        self._best_ratio = self._eval_last_ratio
+        self._best_goal = self._eval_last_goal
         
     def _get_high_priority_indices(self):
         """
@@ -155,6 +163,8 @@ class TabuSearch:
         self.current_solution = solution
         self.best_solution = solution.copy()
         self.best_value = self.evaluate_solution()
+        self._best_ratio = self._eval_last_ratio
+        self._best_goal = self._eval_last_goal
         
     def evaluate_solution(self) -> float:
         """
@@ -198,6 +208,7 @@ class TabuSearch:
 
         # zapisz “ostatnio policzone” metryki (do logowania w run())
         self._eval_last_ratio = float(ratio)
+        self._eval_last_goal = float(goal_value)
 
         if self.config.objective_strategy == ObjectiveStrategy.THRESHOLD_COVERAGE:
             return float(ratio)
@@ -412,6 +423,10 @@ class TabuSearch:
                     # utrzymujemy spójne długości list historii
                     self.history['current_ratio'].append(self.history['current_ratio'][-1])
                     self.history['best_ratio'].append(self._best_ratio)
+                    last_goal = self.history["current_goal"][-1] if self.history["current_goal"] else self._best_goal
+                    self.history["current_goal"].append(last_goal)
+                    self.history["best_goal"].append(self._best_goal)
+                    
                     self.history['tabu_reject_cnt'].append(self.tabu_reject_cnt)
                 continue
             
@@ -421,8 +436,7 @@ class TabuSearch:
             # logowanie rzeczy
             current_val = self.evaluate_solution()
             current_ratio = self._eval_last_ratio
-           
-
+            current_goal = self._eval_last_goal
 
             new_router_score = self._get_single_router_score(r_id) # Nowy wynik routera
             
@@ -481,6 +495,7 @@ class TabuSearch:
                     self.best_solution = list(self.current_solution)
                     self.best_value = current_val
                     self._best_ratio = current_ratio
+                    self._best_goal = current_goal
 
             else:
                 if is_tabu:
@@ -490,16 +505,23 @@ class TabuSearch:
                 if self.history['current_values']:
                     current_val = self.history['current_values'][-1]
                     current_ratio = self.history['current_ratio'][-1]
+                    # current_goal = self.history["current_goal"][-1]
+                    current_goal = self.history["current_goal"][-1] if self.history["current_goal"] else self._best_goal
                 else:
                     current_val = self.best_value
                     current_ratio = self._best_ratio
+                    current_goal = self._best_goal 
 
             # Logowanie
             self.history['iterations'].append(iteration)
             self.history['best_values'].append(self.best_value)
             self.history['current_values'].append(current_val)
+
             self.history['current_ratio'].append(current_ratio)
             self.history['best_ratio'].append(self._best_ratio)
+
+            self.history["current_goal"].append(current_goal)
+            self.history["best_goal"].append(self._best_goal)
 
             self.history['tabu_reject_cnt'].append(self.tabu_reject_cnt)
 
@@ -510,7 +532,7 @@ class TabuSearch:
                     if self.building.Floor_list and 0 <= heatmap_floor_idx < len(self.building.Floor_list):
                         heatmap = self.building.agregation_func_for_floor(heatmap_floor_idx, self.available_routers)
                 on_progress(iteration, float(self.best_value), float(current_val), heatmap)
-            time.sleep(0.001)  # małe opóźnienie by GUI zdążyło odświeżyć
+            # time.sleep(0.001)  # małe opóźnienie by GUI zdążyło odświeżyć
 
         # Reset i ustawienie
         for r in self.available_routers:

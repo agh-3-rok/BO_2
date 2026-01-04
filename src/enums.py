@@ -1,5 +1,9 @@
 from enum import Enum
 
+class ObjectiveStrategy(Enum):
+    WEIGHTED_SIGNAL_SUM = 1  # liczymy sumę sygnałów ważoną macierzą cover 
+    THRESHOLD_COVERAGE = 2   # liczymy ilość punktów, które mają sygnał powyżej progu 
+
 class TabuStrategy(Enum):
     BLOCK_ROUTER_ID = 1      # Zablokuj konkretny ID routera 
     BLOCK_AREA_RADIUS = 2    # Zablokuj stare miejsce i jego okolicę 

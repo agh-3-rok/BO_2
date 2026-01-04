@@ -457,6 +457,8 @@ class Building:
 
         return global_map
 
+
+
     def calculate_router_usefulness(self) -> List[float]:
         """
         Oblicza "przydatność" każdego routera z listy self.available_routers.

@@ -4,7 +4,7 @@ from typing import Callable
 import random
 from .data_matrices import Building, Router
 from .config import SimulationConfig
-from .enums import TabuStrategy, AspirationStrategy, InitialSolutionStrategy, LocalChangeStrategy
+from .enums import TabuStrategy, AspirationStrategy, InitialSolutionStrategy, LocalChangeStrategy, ObjectiveStrategy
 import time
 
 # pomocniczy typ dla callbacka postępu
@@ -59,9 +59,19 @@ class TabuSearch:
         self.history = {
             'iterations': [],
             'best_values': [],
-            'current_values': []
+            'current_values': [],
+
+
+            'current_ratio': [],
+            'best_ratio': [],
+
+            'tabu_reject_cnt': [],
         }
-        
+
+        self._eval_last_ratio = 0.0
+        self._best_ratio = 0.0
+        self.tabu_reject_cnt = 0
+
         self.high_priority_indices = self._get_high_priority_indices()
         
     def initial_solution(self):
@@ -152,23 +162,47 @@ class TabuSearch:
         
         Kroki:
         1. Użyć agregation_func do stworzenia globalnej mapy zasięgu
-        2. Obliczyć wartość funkcji celu (suma iloczynów zasięgu i wag cover)
+        2. Obliczyć wartość funkcji celu (suma iloczynów zasięgu i wag cover) oraz ratio pokrycia nad progiem
         3. I tak dla każdego piętra
         
         Returns:
             wartość funkcji celu
         """
-        goal_value = 0
+
+        goal_value = 0.0
+        covered = 0
+        total = 0
+
+        # parametry dla threshold coverage
+        threshold_base_db = float(self.config.coverage_threshold_db)
+        threshold_step_db = float(self.config.coverage_threshold_step_db)
+
         for floor_idx in range(len(self.building.Floor_list)):
-            
-            # agreguj zasięgi wszystkich routerów dla danego piętra
-            map_of_signal_for_floor = self.building.agregation_func_for_floor(floor_idx, self.available_routers)
-        
-            # Oblicz funkcję celu: suma iloczynów zasięgu * wagi cover
+            map_of_signal_for_floor = self.building.agregation_func_for_floor(
+                floor_idx, self.available_routers
+            )
+
             pietro = self.building.Floor_list[floor_idx]
-            goal_value += np.sum(pietro.cover * map_of_signal_for_floor)
-            
-        return goal_value
+            goal_value += float(np.sum(pietro.cover * map_of_signal_for_floor))
+
+            cover = np.asarray(pietro.cover)
+            mask = cover > 0
+            if np.any(mask):
+                req_db = threshold_base_db + (cover.astype(float) - 1.0) * threshold_step_db
+                req_lin = np.power(10.0, req_db / 10.0)
+
+                covered += int(np.count_nonzero(mask & (map_of_signal_for_floor >= req_lin)))
+                total += int(np.count_nonzero(mask))
+
+        ratio = (covered / total) if total > 0 else 0.0
+
+        # zapisz “ostatnio policzone” metryki (do logowania w run())
+        self._eval_last_ratio = float(ratio)
+
+        if self.config.objective_strategy == ObjectiveStrategy.THRESHOLD_COVERAGE:
+            return float(ratio)
+        
+        return float(goal_value)
     
     def local_change(self):
         """
@@ -345,6 +379,8 @@ class TabuSearch:
                 self.initial_solution()
 
         aspiration_cnt = 0
+
+        self.tabu_reject_cnt = 0
         
         self.tabu_list = []
         
@@ -372,11 +408,22 @@ class TabuSearch:
                     self.history['iterations'].append(iteration)
                     self.history['best_values'].append(self.best_value)
                     self.history['current_values'].append(self.history['current_values'][-1])
+
+                    # utrzymujemy spójne długości list historii
+                    self.history['current_ratio'].append(self.history['current_ratio'][-1])
+                    self.history['best_ratio'].append(self._best_ratio)
+                    self.history['tabu_reject_cnt'].append(self.tabu_reject_cnt)
                 continue
             
             # wykonanie ruchu
             self._apply_move(r_id, old_p, new_p)
+
+            # logowanie rzeczy
             current_val = self.evaluate_solution()
+            current_ratio = self._eval_last_ratio
+           
+
+
             new_router_score = self._get_single_router_score(r_id) # Nowy wynik routera
             
             # sprawdzenie w tabu: dwie możliwe logiki
@@ -433,18 +480,28 @@ class TabuSearch:
                 if current_val > self.best_value:
                     self.best_solution = list(self.current_solution)
                     self.best_value = current_val
+                    self._best_ratio = current_ratio
+
             else:
+                if is_tabu:
+                    self.tabu_reject_cnt += 1
                 # odrzucenie ruchu
                 self._revert_move(r_id, old_p, new_p)
                 if self.history['current_values']:
                     current_val = self.history['current_values'][-1]
+                    current_ratio = self.history['current_ratio'][-1]
                 else:
                     current_val = self.best_value
+                    current_ratio = self._best_ratio
 
             # Logowanie
             self.history['iterations'].append(iteration)
             self.history['best_values'].append(self.best_value)
             self.history['current_values'].append(current_val)
+            self.history['current_ratio'].append(current_ratio)
+            self.history['best_ratio'].append(self._best_ratio)
+
+            self.history['tabu_reject_cnt'].append(self.tabu_reject_cnt)
 
             # Live progress dla GUI (opcjonalnie)
             if on_progress is not None and progress_every > 0 and (iteration % progress_every == 0):

@@ -1,11 +1,14 @@
 from dataclasses import dataclass
-from .enums import TabuStrategy, AspirationStrategy, InitialSolutionStrategy, LocalChangeStrategy
+from .enums import TabuStrategy, AspirationStrategy, InitialSolutionStrategy, LocalChangeStrategy, ObjectiveStrategy
 
 @dataclass
 class SimulationConfig:
     """Klasa przechowująca wszystkie parametry symulacji w jednym miejscu."""
     
     # --- Parametry Algorytmu Tabu Search ---
+    # objective_strategy: ObjectiveStrategy = ObjectiveStrategy.WEIGHTED_SIGNAL_SUM
+    objective_strategy: ObjectiveStrategy = ObjectiveStrategy.THRESHOLD_COVERAGE
+
     tabu_strategy: TabuStrategy = TabuStrategy.BLOCK_ROUTER_ID
     aspiration_strategy: AspirationStrategy = AspirationStrategy.LOCAL_GAIN
     # init_strategy: InitialSolutionStrategy = InitialSolutionStrategy.WEIGHTED_RANDOM_INITIALIZATION
@@ -24,6 +27,9 @@ class SimulationConfig:
     # --- Parametry Środowiska / Budynku ---
     num_routers: int = 5                            # Liczba ruterów do umieszczenia
     router_range: int = 10                          # Zasięg rutera (metry)  
+    coverage_threshold_db: float = -60.0            # Próg sygnału (dBm) powyżej którego punkt jest uznawany za pokryty (basic - skalowanie)
+    coverage_threshold_step_db: float = 3.0         # Krok sygnału (dBm)
+
     floor_damping: float = 2.0                  # Tłumienie stropu (fizyka)
     min_distance: float = 4.0                   # Minimalna odległość między ruterami
     floor_heights: float = 3.0                  # Wysokość piętra domyślna (metry)

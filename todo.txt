@@ -17,6 +17,13 @@ FRONTEND
 - rysowanie wykresu funkcji celu (real time ?) 
 - zaznaczać na heat mapie ściany i gdzie jest liczone
 
+RAPORT
+- czym jest is_safe? opisać 
+- troszkę więcej szczegółów implemetacyjnych do samego algosa,
+ jakie struktory danych, 
+ jak jest licozna jest użyteczność routera
+
+
 
 Do sprawdzenia: 
 

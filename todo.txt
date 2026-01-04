@@ -1,6 +1,6 @@
 Do zrobienia:
 
-Cel na ten tydzień: podstawy GUI + ulepszenie algorytmu
+Cel na ten tydzień: SKOŃCZYĆ
 
 założenia :
 - (każdy kurna) pisać modułowo z myślą o rozbudowie (żeby się wygodnie dało zmienić funkcję na inną itp)
@@ -9,21 +9,18 @@ założenia :
 co zrobić:
 
 BACKEND
-- zaimplementować lokalne zmiany rozwiązania (inny wariant, powinno być łatwo coś innego) 
-- ogarnąć kryterium aspiracji (czemu się nie uaktywnia, itd)
-- zaimplementować rozwiązanie "konstrukcyjne" (przynajmniej jedna wersja) -> potancjalnie może być głupie (jednak fajnie by wykorzystać jakieś na podstawie użytecznośći danego routera w danym rozw.) 
+- dołożyć 2 wersje funkcji celu liczącą w ilu miejscach dany router daje zasięg -> KORZYSTAĆ Z THRESHOLD
+
 
 FRONTEND
-- gui ogarnąć jakie
-- wpisywanie danych
-- rysowanie wykresu funkcji celu, najlepiej real time
-- pobieraie danych z porgramu
-- pierwszy prototyp wpisywanie macierzy zaznaczanie kolorkami na piętrach jakoś
+- wpisywanie danych -> brakuje ilości routerów
+- rysowanie wykresu funkcji celu (real time ?) 
+- zaznaczać na heat mapie ściany i gdzie jest liczone
 
 
 Do sprawdzenia: 
 
-- fizyczność rozw. 
+- fizyczność rozw. -> CZY ZGADZA SIĘ Z LOGIKĄ? 
 
 -- zrobić testy fizycznośći rozw. -> jakieś przykłady 2 skupiska miejsc gdzie chcemy mieć zasięg, między nimi kilka ścian (a co jak będize podłoga, albo kilka pięter), gdzie algorytm da router, 
 -- badanie wpływu parametrów fizycznych na algorytm
@@ -37,3 +34,4 @@ Do sprawdzenia:
 
 ----------------- EWENTUALNE POPRAWY DZIAŁANIA ----------------
 zmiana obliczania local_change -> wyliczanie w tej funkcji danych dla rutera sprawia ze potem w run trzeba w elsie szukać starego rozwiązania, lepiej robić w run snapshot starego
+

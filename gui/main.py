@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QSpinBox, QDoubleSpinBox, QGroupBox, QStackedWidget,
     QDialog, QDialogButtonBox,
     QListWidget, QFileDialog,
-    QMessageBox, QLabel,
+    QMessageBox, QLabel, QComboBox
 )
 
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
@@ -36,6 +36,13 @@ try:
     from src.data_matrices import Building, Floor, Router
     from src.algorithms import TabuSearch
     from src.config import SimulationConfig
+    from src.enums import (
+    ObjectiveStrategy,
+    TabuStrategy,
+    AspirationStrategy,
+    InitialSolutionStrategy,
+    LocalChangeStrategy,
+)
 except ImportError as e:
     print(f"Błąd importu! Upewnij się, że plik backendu jest w dobrej ścieżce. Info: {e}")
     sys.exit(1)
@@ -112,10 +119,45 @@ class MainWindow(QMainWindow):
 
 
         """ Pola do ustawiania parametrów symulacji"""
-
-        # Lewy panel sterowania, parametry 
+        # --- Lewy panel sterowania, parametry  ---
         control_panel = QVBoxLayout()
         layout.addLayout(control_panel, 1)
+
+         # --- Panel wyboru strategii algorytmu ---
+        algo_group = QGroupBox("Wersja algorytmu")
+        algo_form = QFormLayout()
+
+        self.combo_objective = QComboBox()
+        self.combo_tabu = QComboBox()
+        self.combo_aspiration = QComboBox()
+        self.combo_init = QComboBox()
+        self.combo_local_change = QComboBox()
+
+        def _fill_enum(combo: QComboBox, enum_cls, current):
+            combo.blockSignals(True)
+            combo.clear()
+            for e in enum_cls:
+                combo.addItem(e.name, e)
+            # ustaw aktualną wartość
+            idx = combo.findData(current)
+            if idx >= 0:
+                combo.setCurrentIndex(idx)
+            combo.blockSignals(False)
+
+        _fill_enum(self.combo_objective, ObjectiveStrategy, self.config.objective_strategy)
+        _fill_enum(self.combo_tabu, TabuStrategy, self.config.tabu_strategy)
+        _fill_enum(self.combo_aspiration, AspirationStrategy, self.config.aspiration_strategy)
+        _fill_enum(self.combo_init, InitialSolutionStrategy, self.config.init_strategy)
+        _fill_enum(self.combo_local_change, LocalChangeStrategy, self.config.local_change_strategy)
+
+        algo_form.addRow("Funkcja celu:", self.combo_objective)
+        algo_form.addRow("Tabu strategy:", self.combo_tabu)
+        algo_form.addRow("Aspiration:", self.combo_aspiration)
+        algo_form.addRow("Init:", self.combo_init)
+        algo_form.addRow("Local change:", self.combo_local_change)
+
+        algo_group.setLayout(algo_form)
+        control_panel.addWidget(algo_group)
 
         group = QGroupBox("Parametry")
         form = QFormLayout()
@@ -139,7 +181,12 @@ class MainWindow(QMainWindow):
         self.spin_iters.setSingleStep(10)
         form.addRow("Max Iteracji:", self.spin_iters)
 
-
+        # pole 4: Liczba routerów
+        self.spin_num_routers = QSpinBox()
+        self.spin_num_routers.setRange(1, 100)  # dobierz max jak chcesz
+        self.spin_num_routers.setValue(int(self.config.num_routers))
+        self.spin_num_routers.setSingleStep(1)
+        form.addRow("Liczba routerów:", self.spin_num_routers)
 
         """ Przyciski """
         group.setLayout(form)
@@ -202,15 +249,29 @@ class MainWindow(QMainWindow):
         heat_row.addWidget(heat_floors_group, 0)
 
 
-        # Wykres 2: Wykres zbieżności
-        self.fig_conv = Figure(figsize=(5, 3))
-        self.canvas_conv = FigureCanvas(self.fig_conv)
-        self.ax_conv = self.fig_conv.add_subplot(111)
-        self.ax_conv.set_title("Funkcja Celu (Best Score)")
-        self.line_best, = self.ax_conv.plot([], [], 'r-', label='best')
-        self.line_current, = self.ax_conv.plot([], [], 'b-', label='current')
-        self.ax_conv.legend(loc="best")
-        vis_panel.addWidget(self.canvas_conv)
+        # Wykresy 2/3: Ratio + Goal (obok siebie)
+        conv_row = QHBoxLayout()
+        vis_panel.addLayout(conv_row)
+
+        # --- Ratio (lewo) ---
+        self.fig_ratio = Figure(figsize=(5, 3))
+        self.canvas_ratio = FigureCanvas(self.fig_ratio)
+        self.ax_ratio = self.fig_ratio.add_subplot(111)
+        self.ax_ratio.set_title("Ratio pokrycia (Best/Current)")
+        self.line_ratio_best, = self.ax_ratio.plot([], [], "r-", label="best")
+        self.line_ratio_current, = self.ax_ratio.plot([], [], "b-", label="current")
+        self.ax_ratio.legend(loc="best")
+        conv_row.addWidget(self.canvas_ratio, 1)
+
+        # --- Goal (prawo) ---
+        self.fig_goal = Figure(figsize=(5, 3))
+        self.canvas_goal = FigureCanvas(self.fig_goal)
+        self.ax_goal = self.fig_goal.add_subplot(111)
+        self.ax_goal.set_title("Goal / Funkcja celu (Best/Current)")
+        self.line_goal_best, = self.ax_goal.plot([], [], "r-", label="best")
+        self.line_goal_current, = self.ax_goal.plot([], [], "b-", label="current")
+        self.ax_goal.legend(loc="best")
+        conv_row.addWidget(self.canvas_goal, 1)
 
 
         """ Strona do definicji macierzy dla pięter """
@@ -282,13 +343,36 @@ class MainWindow(QMainWindow):
         self.config.floor_damping = float(self.spin_damping.value())
         self.config.tabu_length = int(self.spin_tabu_len.value())
         self.config.max_iterations = int(self.spin_iters.value())
+        self.config.num_routers = int(self.spin_num_routers.value())
+
+        # strategie
+        self.config.objective_strategy = self.combo_objective.currentData()
+        self.config.tabu_strategy = self.combo_tabu.currentData()
+        self.config.aspiration_strategy = self.combo_aspiration.currentData()
+        self.config.init_strategy = self.combo_init.currentData()
+        self.config.local_change_strategy = self.combo_local_change.currentData()
 
     # pomocnicza metoda służąca do synchronizacji UI z configiem
     # po wczytaniu symulacji
     def _sync_ui_from_config(self):
+        # parametry liczbowe
         self.spin_damping.setValue(float(self.config.floor_damping))
         self.spin_tabu_len.setValue(int(self.config.tabu_length))
         self.spin_iters.setValue(int(self.config.max_iterations))
+        self.spin_num_routers.setValue(int(self.config.num_routers))
+
+        # strategie
+        def _set_combo(combo: QComboBox, value):
+            idx = combo.findData(value)
+            if idx >= 0:
+                combo.setCurrentIndex(idx)
+
+        _set_combo(self.combo_objective, self.config.objective_strategy)
+        _set_combo(self.combo_tabu, self.config.tabu_strategy)
+        _set_combo(self.combo_aspiration, self.config.aspiration_strategy)
+        _set_combo(self.combo_init, self.config.init_strategy)
+        _set_combo(self.combo_local_change, self.config.local_change_strategy)
+        
 
     # metoda używana przy zapisie symulacji
     def save_simulation(self):
@@ -360,12 +444,21 @@ class MainWindow(QMainWindow):
         self.history_best = []
         self.history_current = []
 
-        self.ax_conv.clear()
-        self.ax_conv.set_title("Funkcja Celu (Best/Current)")
-        self.line_best, = self.ax_conv.plot([], [], 'r-', label='best')
-        self.line_current, = self.ax_conv.plot([], [], 'b-', label='current')
-        self.ax_conv.legend(loc="best")
-        self.canvas_conv.draw()
+        # reset ratio
+        self.ax_ratio.clear()
+        self.ax_ratio.set_title("Ratio pokrycia (Best/Current)")
+        self.line_ratio_best, = self.ax_ratio.plot([], [], "r-", label="best")
+        self.line_ratio_current, = self.ax_ratio.plot([], [], "b-", label="current")
+        self.ax_ratio.legend(loc="best")
+        self.canvas_ratio.draw()
+
+        # reset goal
+        self.ax_goal.clear()
+        self.ax_goal.set_title("Goal / Funkcja celu (Best/Current)")
+        self.line_goal_best, = self.ax_goal.plot([], [], "r-", label="best")
+        self.line_goal_current, = self.ax_goal.plot([], [], "b-", label="current")
+        self.ax_goal.legend(loc="best")
+        self.canvas_goal.draw()
 
 
         # uruchamiamy wątek 
@@ -423,6 +516,14 @@ class MainWindow(QMainWindow):
         self.history_best.append(float(best))
         self.history_current.append(float(current))
 
+        iters = [int(x) for x in self.history.get("iterations", [])]
+
+        best_goal = [float(x) for x in self.history.get("best_values", [])]
+        curr_goal = [float(x) for x in self.history.get("current_values", [])]
+
+        best_ratio = [float(x) for x in self.history.get("best_ratio", [])]
+        curr_ratio = [float(x) for x in self.history.get("current_ratio", [])]
+
         # update linii (X = iteration)
         self.line_best.set_data(self.history_iters, self.history_best)
         self.line_current.set_data(self.history_iters, self.history_current)
@@ -452,26 +553,44 @@ class MainWindow(QMainWindow):
         
         # rysowanie ze wszystkiego na końcu
         iters = [int(x) for x in history.get("iterations", [])]
-        best = [float(x) for x in history.get("best_values", [])]
-        curr = [float(x) for x in history.get("current_values", [])]
 
-        self.ax_conv.clear()
-        self.ax_conv.set_title("Funkcja Celu (Best/Current)")
-        self.ax_conv.plot(iters, best, "r-", label="best")
-        self.ax_conv.plot(iters, curr, "b-", label="current")
-        self.ax_conv.legend(loc="best")
+        best_goal = [float(x) for x in history.get("best_values", [])]
+        curr_goal = [float(x) for x in history.get("current_values", [])]
 
+        best_ratio = [float(x) for x in history.get("best_ratio", [])]
+        curr_ratio = [float(x) for x in history.get("current_ratio", [])]
+
+
+        # --- Ratio (lewo) ---
+        self.ax_ratio.clear()
+        self.ax_ratio.set_title("Ratio pokrycia (Best/Current)")
+        self.ax_ratio.plot(iters, best_ratio, "r-", label="best")
+        self.ax_ratio.plot(iters, curr_ratio, "b-", label="current")
+        self.ax_ratio.legend(loc="best")
         if iters:
-            self.ax_conv.set_xlim(0, max(iters))
-        all_y = best + curr
+            self.ax_ratio.set_xlim(0, max(iters))
+        # ratio naturalnie w [0,1]
+        self.ax_ratio.set_ylim(0.0, 1.05)
+        self.canvas_ratio.draw()
+
+        # --- Goal (prawo) ---
+        self.ax_goal.clear()
+        self.ax_goal.set_title("Goal / Funkcja celu (Best/Current)")
+        self.ax_goal.plot(iters, best_goal, "r-", label="best")
+        self.ax_goal.plot(iters, curr_goal, "b-", label="current")
+        self.ax_goal.legend(loc="best")
+        if iters:
+            self.ax_goal.set_xlim(0, max(iters))
+
+        all_y = best_goal + curr_goal
         if all_y:
             lo, hi = min(all_y), max(all_y)
             if lo == hi:
                 lo -= 1.0
                 hi += 1.0
-            self.ax_conv.set_ylim(lo * 0.98, hi * 1.02)
+            self.ax_goal.set_ylim(lo * 0.98, hi * 1.02)
 
-        self.canvas_conv.draw()
+        self.canvas_goal.draw()
 
         # Heatmapa tylko raz na końcu 
         if hasattr(self, "_tabu_last") and self._tabu_last is not None:

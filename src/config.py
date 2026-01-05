@@ -26,7 +26,7 @@ class SimulationConfig:
 
     # --- Parametry Środowiska / Budynku ---
     num_routers: int = 5                            # Liczba ruterów do umieszczenia
-    router_range: int = 29                          # Zasięg rutera (kratki w macierzy)  
+    router_range: int = 9                          # Zasięg rutera (kratki w macierzy)  
     coverage_threshold_db: float = -60.0            # Próg sygnału (dBm) powyżej którego punkt jest uznawany za pokryty (basic - skalowanie)
     coverage_threshold_step_db: float = 3.0         # Krok sygnału (dBm)
 

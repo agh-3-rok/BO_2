@@ -1,141 +1,275 @@
+import sys
+import os
+import copy
+import random
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
 
-# Importy Twoich klas
-from config import SimulationConfig
-from data_matrices import Building, Floor, Router
-from algorithms import TabuSearch 
-from enums import TabuStrategy, AspirationStrategy, InitialSolutionStrategy, LocalChangeStrategy
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-map_size = 300 #rozmiar mapki
-num_runs = 50 #liczba przebiegów
+from src.config import SimulationConfig
+from src.data_matrices import Building, Floor, Router
+from src.algorithms import TabuSearch
+from src.enums import (
+    TabuStrategy,
+    AspirationStrategy,
+    InitialSolutionStrategy,
+    LocalChangeStrategy,
+)
 
-def create_environment(config: SimulationConfig):
-    """
-    Tworzy środowisko (budynek) na podstawie konfiguracji.
-    """
-    floors = []
+MAP_SIZE = 100
+NUM_RUNS_PER_CFG = 50
+MAP_FILE = None  # Ustaw nazwę pliku .npz, np. "maps/map_50x2.npz" lub None aby użyć domyślnej mapy
+
+
+def create_environment(config: SimulationConfig) -> Building:
+    """Wczytuje budynek z pliku npz lub generuje domyślny."""
+    if MAP_FILE is not None:
+        try:
+            data = np.load(MAP_FILE, allow_pickle=True)
+            
+            num_floors = int(data["num_floors"])
+            wall_matrices = data["wall_matrices"]
+            router_matrices = data["router_matrices"]
+            cover_matrices = data["cover_matrices"]
+            
+            floors = []
+            for f in range(num_floors):
+                floors.append(
+                    Floor(
+                        wall_matrix=wall_matrices[f],
+                        router_matrix=router_matrices[f],
+                        cover_matrix=cover_matrices[f],
+                        Floor_number=f,
+                        Floor_thickness=0.5,
+                    )
+                )
+            
+            building = Building(
+                Floors=floors,
+                Floor_heights=3.0,
+                available_routers=[],
+                config=config,
+            )
+            print(f"✓ Wczytana mapa z: {MAP_FILE}\n")
+            return building
+        except Exception as e:
+            print(f"⚠ Nie można wczytać {MAP_FILE}: {e}")
+            print("Używam domyślnej mapy...\n")
     
-    # Tworzymy 2 piętra dla przykładu
+    # Domyślna mapa
+    floors = []
     for f in range(2):
-        # 1. Macierz ścian (wall_matrix)
-        # Puste piętro z ramką dookoła
-        wall_matrix = np.zeros((map_size, map_size), dtype=float)
+        wall_matrix = np.zeros((MAP_SIZE, MAP_SIZE), dtype=float)
         wall_matrix[0, :] = 5.0
         wall_matrix[-1, :] = 5.0
         wall_matrix[:, 0] = 5.0
         wall_matrix[:, -1] = 5.0
         
-        # Dodajemy jakąś ścianę w środku, żeby było ciekawiej
         if f == 0:
-            wall_matrix[10:20, 15] = 8.0  # Gruba ściana na parterze
-        
-        # 2. Macierz możliwych routerów (router_matrix)
-        # Wszędzie można (1), chyba że jest ściana
-        router_matrix = np.ones((map_size, map_size), dtype=int)
-        
-        # 3. Macierz priorytetów (cover_matrix)
-        # Parter mniej ważny (5), Piętro 1 ważniejsze (50)
-        cover_matrix = np.zeros((map_size, map_size), dtype=int)
-        priority = 50 if f == 1 else 5
-        cover_matrix.fill(priority)
-        
-        # Tworzymy obiekt Floor
-        # WAŻNE: Kolejność argumentów zgodna z Twoim data_matrices.py:
-        # __init__(self, wall_matrix, router_matrix, cover_matrix, Floor_number, Floor_thickness)
-        new_floor = Floor(
-            wall_matrix,    # wall_matrix
-            router_matrix,  # router_matrix
-            cover_matrix,   # cover_matrix
-            f,              # Floor_number
-            0.5             # Floor_thickness
+            wall_matrix[10:20, 15] = 8.0
+            wall_matrix[25, 10:30] = 6.0
+            wall_matrix[15:35, 25] = 7.0
+            wall_matrix[30:40, 35] = 5.0
+        else:
+            wall_matrix[5:15, 20] = 6.0
+            wall_matrix[20, 15:35] = 7.0
+            wall_matrix[30:45, 10] = 8.0
+            wall_matrix[35, 25:40] = 5.0
+
+        router_matrix = np.ones((MAP_SIZE, MAP_SIZE), dtype=int)
+
+        cover_matrix = np.zeros((MAP_SIZE, MAP_SIZE), dtype=int)
+        cover_matrix.fill(50 if f == 1 else 5)
+
+        floors.append(
+            Floor(
+                wall_matrix=wall_matrix,
+                router_matrix=router_matrix,
+                cover_matrix=cover_matrix,
+                Floor_number=f,
+                Floor_thickness=0.5,
+            )
         )
-        floors.append(new_floor)
 
-    # Tworzymy budynek
-    # WAŻNE: Tutaj przekazujemy 'config', bo Twój __init__ w Building tego wymaga
-    building = Building(
-        Floors=floors, 
-        Floor_heights=3.0, 
-        available_routers=[], # Routery dodamy za chwilę
-        config=config         # <--- Przekazanie configa
+    return Building(
+        Floors=floors,
+        Floor_heights=3.0,
+        available_routers=[],
+        config=config,
     )
-    
-    return building
 
-def main():
-    # 1. Konfiguracja symulacji
-    print(">>> Tworzenie konfiguracji...")
-    
-    
-    config = SimulationConfig(
-        # Parametry środowiska
-        num_routers=10,
-        router_range=20,
+
+def build_config(tabu: TabuStrategy, asp: AspirationStrategy, init: InitialSolutionStrategy, local: LocalChangeStrategy) -> SimulationConfig:
+    base = SimulationConfig(
+        num_routers=8,
+        router_range=9,
         floor_damping=2.0,
-        
-        # Parametry algorytmu
-        max_iterations=50,
+        max_iterations=40,
         tabu_length=10,
         min_distance=4.0,
-        
-        # Strategie (korzystamy z Enums)
-        tabu_strategy=TabuStrategy.BLOCK_ROUTER_ID,
-        aspiration_strategy=AspirationStrategy.GLOBAL_BEST,
-        init_strategy=InitialSolutionStrategy.WEIGHTED_RANDOM_INITIALIZATION,
-        local_change_strategy=LocalChangeStrategy.SMART_LOCAL_CHANGE,
-        
-        # Parametry aspiracji w przypadku gdy używamy LOCAL_GAIN
+        tabu_strategy=tabu,
+        aspiration_strategy=asp,
+        init_strategy=init,
+        local_change_strategy=local,
         aspiration_threshold=1.05,
         aspiration_usability_threshold=50.0,
     )
+    return base
 
-    # 2. Budowa środowiska
-    print(">>> Generowanie budynku...")
-    building = create_environment(config)
-    
-    # 3. Tworzenie routerów
-    print(f">>> Tworzenie {config.num_routers} routerów...")
-    routers = []
-    for _ in range(config.num_routers):
-        # Power=20, Max_users=100 (przykładowo), Max_range z configa
-        r = Router(Power=20.0, Max_users=100, Max_range=config.router_range)
-        routers.append(r)
-        
-    # Przypisanie routerów do budynku
+
+def setup_solver(cfg: SimulationConfig) -> TabuSearch:
+    building = create_environment(cfg)
+    routers = [Router(Power=20.0, Max_users=100, Max_range=cfg.router_range) for _ in range(cfg.num_routers)]
     building.available_routers = routers
+    return TabuSearch(building=building, available_routers=routers, config=cfg)
 
-    # 4. Inicjalizacja algorytmu Tabu Search
-    print(">>> Inicjalizacja algorytmu Tabu Search...")
-    solver = TabuSearch(
-        building=building,
-        available_routers=routers,
-        config=config
+
+def main():
+    random.seed(123)
+    np.random.seed(123)
+
+    tabu_variants = [TabuStrategy.BLOCK_ROUTER_ID, TabuStrategy.BLOCK_AREA_RADIUS]
+    asp_variants = [AspirationStrategy.GLOBAL_BEST, AspirationStrategy.LOCAL_GAIN]
+    init_variants = [InitialSolutionStrategy.WEIGHTED_RANDOM_INITIALIZATION, InitialSolutionStrategy.RANDOM_INITIALIZATION]
+    local_variants = [LocalChangeStrategy.SMART_LOCAL_CHANGE, LocalChangeStrategy.RANDOM_LOCAL_CHANGE]
+
+    results = {}  # key: (tabu, asp, init, local) -> dict with lists
+
+    combos = []
+    for tabu in tabu_variants:
+        for asp in asp_variants:
+            for init in init_variants:
+                for local in local_variants:
+                    combos.append((tabu, asp, init, local))
+
+    best_overall_value = -np.inf
+    best_overall_solver = None
+    best_overall_key = None
+
+    for idx, (tabu, asp, init, local) in enumerate(combos):
+        cfg = build_config(tabu, asp, init, local)
+        key = (tabu, asp, init, local)
+        results[key] = {
+            "best_vals": [],
+            "tabu_rejects": [],
+            "asp_counts": [],
+        }
+
+        for run_idx in range(NUM_RUNS_PER_CFG):
+            seed = 1000 + idx * 100 + run_idx
+            random.seed(seed)
+            np.random.seed(seed)
+
+            solver = setup_solver(copy.deepcopy(cfg))
+            best_sol, best_val, history, asp_cnt = solver.run()
+            
+            series = history.get("best_values", [])
+            tabu_reject_series = history.get("tabu_reject_cnt", [])
+            
+            if series:
+                final_best = series[-1]
+                results[key]["best_vals"].append(final_best)
+                results[key]["asp_counts"].append(asp_cnt)
+                
+                if tabu_reject_series:
+                    results[key]["tabu_rejects"].append(tabu_reject_series[-1])
+                else:
+                    results[key]["tabu_rejects"].append(0)
+                
+                if final_best > best_overall_value:
+                    best_overall_value = final_best
+                    best_overall_solver = solver
+                    best_overall_key = key
+
+    # Przygotuj macierz do heatmapy: wiersze = tabu strategy, kolumny = kombinacje (asp, init, local)
+    row_labels = [t.name for t in tabu_variants]
+    col_labels = []
+    for asp in asp_variants:
+        for init in init_variants:
+            for local in local_variants:
+                col_labels.append(f"{asp.name[:3]}-{init.name.split('_')[0]}-{local.name.split('_')[0]}")
+
+    data_mean = np.zeros((len(row_labels), len(col_labels)))
+    data_best = np.zeros((len(row_labels), len(col_labels)))
+    data_tabu = np.zeros((len(row_labels), len(col_labels)))
+    data_asp = np.zeros((len(row_labels), len(col_labels)))
+
+    for r, tabu in enumerate(tabu_variants):
+        for c, (asp, init, local) in enumerate([(a, i, l) for a in asp_variants for i in init_variants for l in local_variants]):
+            res = results.get((tabu, asp, init, local), {})
+            vals = res.get("best_vals", [])
+            tabu_rej = res.get("tabu_rejects", [])
+            asp_cnt = res.get("asp_counts", [])
+            
+            data_mean[r, c] = np.mean(vals) if vals else np.nan
+            data_best[r, c] = np.max(vals) if vals else np.nan
+            data_tabu[r, c] = np.mean(tabu_rej) if tabu_rej else np.nan
+            data_asp[r, c] = np.mean(asp_cnt) if asp_cnt else np.nan
+
+    # Tworzenie adnotacji wieloliniowych
+    annot_array = np.empty((len(row_labels), len(col_labels)), dtype=object)
+    for r in range(len(row_labels)):
+        for c in range(len(col_labels)):
+            annot_array[r, c] = (
+                f"Best: {data_best[r, c]:.4g}\n"
+                f"Mean: {data_mean[r, c]:.4g}\n"
+                f"Tabu: {data_tabu[r, c]:.2f}\n"
+                f"Asp: {data_asp[r, c]:.2f}"
+            )
+
+    df = pd.DataFrame(data_best, index=row_labels, columns=col_labels)
+
+    fig1 = plt.figure(figsize=(16, 6))
+    sns.heatmap(
+        df,
+        annot=annot_array,
+        fmt="",
+        cmap="rocket_r",
+        cbar=True,
+        linewidths=0.5,
+        linecolor="white",
+        annot_kws={"fontsize": 7},
     )
+    plt.title(f"Statystyki z {NUM_RUNS_PER_CFG} uruchomień (MAP={MAP_SIZE}x{MAP_SIZE})")
+    plt.xlabel("Asp / Init / Local")
+    plt.ylabel("Tabu strategy")
+    plt.tight_layout()
 
-    # 5. Uruchomienie
-    print(">>> START SYMULACJI")
-    best_solution, best_value, history, asp_count = solver.run()
-    
-    print("\n" + "="*40)
-    print("KONIEC SYMULACJI")
-    print(f"Najlepszy wynik (funkcja celu): {best_value:.2f}")
-    print(f"Liczba użytych aspiracji: {asp_count}")
-    print("="*40)
+    # Mapa pokrycia najlepszego rozwiązania
+    if best_overall_solver is not None:
+        fig2 = plt.figure(figsize=(10, 5))
+        
+        for floor_idx in range(len(best_overall_solver.building.Floor_list)):
+            ax = fig2.add_subplot(1, len(best_overall_solver.building.Floor_list), floor_idx + 1)
+            heatmap_data = best_overall_solver.building.agregation_func_for_floor(
+                floor_idx, best_overall_solver.available_routers
+            )
+            
+            # Nałóż ściany jako białe obszary
+            floor = best_overall_solver.building.Floor_list[floor_idx]
+            wall_mask = floor.wall_matrix > 0
+            heatmap_with_walls = heatmap_data.copy()
+            heatmap_with_walls[wall_mask] = np.max(heatmap_data) * 1.2  # ściany jako jasne obszary
+            
+            im = ax.imshow(heatmap_with_walls, cmap="jet", origin="upper", interpolation="nearest")
+            ax.set_title(f"Piętro {floor_idx}")
+            fig2.colorbar(im, ax=ax)
+        
+        fig2.suptitle(
+            f"Najlepsza mapa pokrycia (value={best_overall_value:.6g})\n"
+            f"Konfiguracja: Tabu={best_overall_key[0].name}, Asp={best_overall_key[1].name}, "
+            f"Init={best_overall_key[2].name}, Local={best_overall_key[3].name}"
+        )
+        plt.tight_layout()
 
-    # 6. Prosty wykres wyników
-    if history['best_values']:
-        plt.figure(figsize=(10, 6))
-        plt.plot(history['best_values'], label='Najlepszy wynik', color='green', linewidth=2)
-        plt.plot(history['current_values'], label='Obecny wynik', color='red', alpha=0.3, linestyle='--')
-        plt.title(f"Przebieg optymalizacji (Smart Local Change)")
-        plt.xlabel("Iteracja")
-        plt.ylabel("Wartość funkcji celu")
-        plt.legend()
-        plt.grid(True)
-        plt.show()
-    else:
-        print("Brak historii do wyświetlenia.")
+    plt.show()
+
+    plt.tight_layout()
+    plt.show()
+
 
 if __name__ == "__main__":
     main()

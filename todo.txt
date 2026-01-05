@@ -10,7 +10,7 @@ co zrobić:
 
 BACKEND
 - (W) is_safe dorzucić do taboo listy 
-
+- (W) Napraawić weghted init
 
 FRONTEND
 - (P) zaznaczać na heat mapie ściany i gdzie jest liczone

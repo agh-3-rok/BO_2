@@ -137,7 +137,7 @@ def create_environment(config: SimulationConfig) -> Building:
     )
 
 
-NUM_RUNS_PER_CFG = 1
+NUM_RUNS_PER_CFG = 20
 OBJECTIVE_FUNCTION = ObjectiveStrategy.THRESHOLD_COVERAGE  # Zmień na THRESHOLD_COVERAGE jeśli chcesz
 
 def build_config(tabu: TabuStrategy, asp: AspirationStrategy, init: InitialSolutionStrategy, local: LocalChangeStrategy) -> SimulationConfig:
@@ -145,7 +145,7 @@ def build_config(tabu: TabuStrategy, asp: AspirationStrategy, init: InitialSolut
         num_routers=25,
         router_range=25,
         floor_damping=2.0,
-        max_iterations=50,
+        max_iterations=200,
         tabu_length=10,  # Zmniejszone z 20 (mniej niż liczba routerów)
         min_distance=10,  # Zmniejszone z 30 (zbyt restrykcyjne)
         tabu_strategy=tabu,
@@ -244,7 +244,15 @@ def main():
 
     # Przygotuj macierz do heatmapy: wiersze = tabu strategy, kolumny = kombinacje (asp, init, local)
     # 4x4 siatka: wiersze = (Tabu x Asp), kolumny = (Init x Local)
-    row_labels = [f"{t.name[:4]}-{a.name[:3]}" for t in tabu_variants for a in asp_variants]
+    # Skrócone nazwy tabu: BLOCK_ROUTER_ID -> ROU_ID, BLOCK_AREA_RADIUS -> AREA_RAD
+    def _tabu_short(t: TabuStrategy) -> str:
+        if t == TabuStrategy.BLOCK_ROUTER_ID:
+            return "ROU_ID"
+        if t == TabuStrategy.BLOCK_AREA_RADIUS:
+            return "AREA_RAD"
+        return t.name[:7]
+
+    row_labels = [f"{_tabu_short(t)}-{a.name[:3]}" for t in tabu_variants for a in asp_variants]
     col_labels = [f"{i.name.split('_')[0]}-{l.name.split('_')[0]}" for i in init_variants for l in local_variants]
 
     data_mean = np.zeros((len(row_labels), len(col_labels)))
@@ -302,7 +310,7 @@ def main():
         pad=15,
         fontweight="bold",
     )
-    ax1.set_xlabel("Init x Local (Best, Mean, TabuRejects, AspCount)", fontsize=16, labelpad=10)
+    ax1.set_xlabel("Init x Local", fontsize=16, labelpad=10)
     ax1.set_ylabel("Tabu x Asp", fontsize=16, labelpad=10)
     
     plt.xticks(fontsize=13, rotation=30, ha="right")

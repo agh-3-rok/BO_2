@@ -14,6 +14,8 @@ from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+import matplotlib as mpl
+from matplotlib import colors as mcolors
 
 # --- KONFIGURACJA ŚCIEŻKI DO BACKENDU ---
 # Dodajemy folder 'backend' do ścieżek, żeby Python go widział
@@ -229,7 +231,12 @@ class MainWindow(QMainWindow):
         self.canvas_map = FigureCanvas(self.fig_map)
         self.ax_map = self.fig_map.add_subplot(111)
         self.ax_map.set_title("Heatmapa Zasięgu")
-        self.heatmap = None
+        # self.heatmap = None
+        self.heatmap_img = None
+        self.walls_img = None
+        self.points_img = None
+        self.heatmap_cbar = None
+        self._map_shape = None
 
         heat_row = QHBoxLayout()
         vis_panel.addLayout(heat_row)
@@ -474,17 +481,104 @@ class MainWindow(QMainWindow):
 
 
     """ Metoda aktualizująca heatmapę na wykresie  to się rzadziej robi żeby nie latało za bardzo GUI"""
-    def update_heat(self, iteration, fitness, matrix):
+    # def update_heat(self, iteration, fitness, matrix):
 
-        #  Heatmapa
-        if self.heatmap is None:
-            self.heatmap = self.ax_map.imshow(matrix, cmap='jet', origin='upper', interpolation='nearest')
-            self.fig_map.colorbar(self.heatmap, ax=self.ax_map)
-        else:
-            self.heatmap.set_data(matrix)
-            self.heatmap.set_clim(vmin=np.min(matrix), vmax=np.max(matrix)) # Autoskalowanie kolorów
+    #     #  Heatmapa
+    #     if self.heatmap is None:
+    #         self.heatmap = self.ax_map.imshow(matrix, cmap='jet', origin='upper', interpolation='nearest')
+    #         self.fig_map.colorbar(self.heatmap, ax=self.ax_map)
+    #     else:
+    #         self.heatmap.set_data(matrix)
+    #         self.heatmap.set_clim(vmin=np.min(matrix), vmax=np.max(matrix)) # Autoskalowanie kolorów
         
+    #     self.canvas_map.draw()
+    def update_heat(self, floor_idx: int, matrix: np.ndarray):
+        if matrix is None:
+            return
+
+        # jeśli zmienił się rozmiar macierzy (inne piętro), rekonstruujemy warstwy
+        if self.heatmap_img is None or (self._map_shape is not None and self._map_shape != matrix.shape):
+            self._reset_map_layers()
+            self._map_shape = matrix.shape
+
+            self.heatmap_img = self.ax_map.imshow(
+                matrix,
+                cmap=mpl.colormaps["jet"],
+                origin="upper",
+                interpolation="nearest",
+            )
+            self.heatmap_cbar = self.fig_map.colorbar(self.heatmap_img, ax=self.ax_map)
+
+            # punkty obliczeń (cover > 0) – zielone kwadraty, półprzezroczyste
+            points_cmap = mcolors.ListedColormap(["lime"])
+            points_cmap.set_bad(alpha=0.0)
+            points_overlay = self._make_points_overlay(floor_idx, matrix.shape)
+            self.points_img = self.ax_map.imshow(
+                points_overlay,
+                cmap=points_cmap,
+                origin="upper",
+                interpolation="nearest",
+                alpha=0.35,
+                vmin=0.0,
+                vmax=1.0,
+            )
+
+            # ściany (wall_matrix > 0) – czarne
+            walls_cmap = mcolors.ListedColormap(["black"])
+            walls_cmap.set_bad(alpha=0.0)
+            walls_overlay = self._make_walls_overlay(floor_idx, matrix.shape)
+            self.walls_img = self.ax_map.imshow(
+                walls_overlay,
+                cmap=walls_cmap,
+                origin="upper",
+                interpolation="nearest",
+                alpha=1.0,
+                vmin=0.0,
+                vmax=1.0,
+            )
+        else:
+            self.heatmap_img.set_data(matrix)
+            self.heatmap_img.set_clim(vmin=float(np.nanmin(matrix)), vmax=float(np.nanmax(matrix)))
+
+            if self.points_img is not None:
+                self.points_img.set_data(self._make_points_overlay(floor_idx, matrix.shape))
+            if self.walls_img is not None:
+                self.walls_img.set_data(self._make_walls_overlay(floor_idx, matrix.shape))
+
         self.canvas_map.draw()
+
+    def _get_map_building(self):
+        return self._tabu_last.building if self._tabu_last is not None else self.building
+
+    def _reset_map_layers(self):
+        if self.heatmap_cbar is not None:
+            self.heatmap_cbar.remove()
+            self.heatmap_cbar = None
+
+        self.ax_map.clear()
+        self.ax_map.set_title("Heatmapa Zasięgu")
+        self.heatmap_img = None
+        self.walls_img = None
+        self.points_img = None
+        self._map_shape = None
+
+    def _make_walls_overlay(self, floor_idx: int, shape):
+        bld = self._get_map_building()
+        if floor_idx < 0 or floor_idx >= len(bld.Floor_list):
+            return np.full(shape, np.nan, dtype=float)
+
+        wall = np.asarray(bld.Floor_list[floor_idx].wall_matrix, dtype=float)
+        mask = wall > 1e-12  # ściana = tłumienie > 0
+        return np.where(mask, 1.0, np.nan).astype(float)
+
+    def _make_points_overlay(self, floor_idx: int, shape):
+        bld = self._get_map_building()
+        if floor_idx < 0 or floor_idx >= len(bld.Floor_list):
+            return np.full(shape, np.nan, dtype=float)
+
+        cover = np.asarray(bld.Floor_list[floor_idx].cover)
+        mask = cover > 0  # dokładnie te punkty liczą się w funkcji celu/ratio
+        return np.where(mask, 1.0, np.nan).astype(float)
 
     # metoda odświeżająca listę pięter w panelu heatmapy
     def _refresh_heatmap_floor_list(self):
@@ -508,7 +602,8 @@ class MainWindow(QMainWindow):
 
         heat = self._tabu_last.building.agregation_func_for_floor(row, self._tabu_last.available_routers)
         best_val = float(getattr(self._tabu_last, "best_value", 0.0))
-        self.update_heat(0, best_val, heat)
+        # self.update_heat(0, best_val, heat)
+        self.update_heat(row, heat)
 
     def _on_algo_progress(self, iteration: int, best: float, current: float, heatmap):
         # zbieranie danych
@@ -545,7 +640,10 @@ class MainWindow(QMainWindow):
 
         # heatmapa (opcjonalnie)
         if heatmap is not None:
-            self.update_heat(iteration, best, heatmap)
+            floor_idx = self.list_heatmap_floors.currentRow()
+            if floor_idx < 0:
+                floor_idx = 0
+            self.update_heat(floor_idx, heatmap)
 
 
     # FUNKCJA OBŁUGUJĄCE KONIEC ALORYTMU
@@ -597,8 +695,13 @@ class MainWindow(QMainWindow):
 
         # Heatmapa tylko raz na końcu 
         if hasattr(self, "_tabu_last") and self._tabu_last is not None:
-            heat = self._tabu_last.building.agregation_func_for_floor(0, self._tabu_last.available_routers)
-            self.update_heat(iters[-1] if iters else 0, best_value, heat)
+            # heat = self._tabu_last.building.agregation_func_for_floor(0, self._tabu_last.available_routers)
+            # self.update_heat(iters[-1] if iters else 0, best_value, heat)
+            floor_idx = self.list_heatmap_floors.currentRow()
+            if floor_idx < 0:
+                floor_idx = 0
+            heat = self._tabu_last.building.agregation_func_for_floor(floor_idx, self._tabu_last.available_routers)
+            self.update_heat(floor_idx, heat)
         
 
         # okienko z komunikatem o zakończeniu

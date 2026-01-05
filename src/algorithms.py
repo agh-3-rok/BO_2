@@ -89,6 +89,13 @@ class TabuSearch:
         num_possible_positions = len(self.building.router_possible)
         num_available_routers = len(self.available_routers)
 
+        # Walidacja
+        if num_possible_positions == 0:
+            raise ValueError("Brak możliwych pozycji dla routerów! Oznacz przynajmniej kilka kafelków jako 'Router' w panelu definicji piętra.")
+        
+        if num_available_routers > num_possible_positions:
+            raise ValueError(f"Za dużo routerów ({num_available_routers}) w stosunku do dostępnych pozycji ({num_possible_positions})! Zmniejsz liczbę routerów lub dodaj więcej miejsc na routery.")
+
         # Inicjalizacja rozwiązania z samymi zerami
         solution = [-1] * num_possible_positions
 
@@ -140,6 +147,13 @@ class TabuSearch:
         
         num_routers = len(self.available_routers)
         indices, probs = self.high_priority_indices
+        
+        # Walidacja
+        if not indices:
+            raise ValueError("Brak pozycji z pokryciem > 0! Oznacz przynajmniej kilka kafelków jako 'Cover' w panelu definicji piętra, aby użyć weighted_random_initialization.")
+        
+        if len(indices) < num_routers:
+            raise ValueError(f"Za mało pozycji z pokryciem ({len(indices)}) w stosunku do liczby routerów ({num_routers})! Dodaj więcej kafelków 'Cover' lub zmniejsz liczbę routerów.")
         
         # Reset
         for r in self.available_routers:

@@ -375,7 +375,7 @@ class FloorDefineWidget(QWidget):
                 elif tile_type == TileType.ROUTER:
                     wall_matrix[r, c] = 0.0
                     router_matrix[r, c] = True
-                    cover_matrix[r, c] = 0
+                    cover_matrix[r, c] = self.cover_value
                 elif tile_type == TileType.NO_TILE:
                     wall_matrix[r, c] = 0.0
                     router_matrix[r, c] = False

@@ -88,7 +88,7 @@ class FloorDefineWidget(QWidget):
 
     def start_new_floor(self, *, floor_number: int, width: int, length: int, thickness: float):
             """
-            Przygotowuje siatkę do edycji. Nie dodaje nic do Building – tylko edycja.
+            Przygotowuje siatkę do edycji. Nie dodaje nic do Building - tylko edycja.
             Dopiero `Zatwierdź` emituje gotowe macierze i Floor.
             """
             self._pending_floor_number = floor_number

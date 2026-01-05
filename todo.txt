@@ -13,8 +13,6 @@ BACKEND
 - (W) Napraawić weghted init
 
 FRONTEND
-- (P) zaznaczać na heat mapie ściany i gdzie jest liczone
-
 
 
 RAPORT
@@ -22,8 +20,8 @@ RAPORT
 - (W) troszkę więcej szczegółów implemetacyjnych do samego algosa, jakie struktory danych, jak jest licozna jest użyteczność routera
 - (W) mapki roueterów po co gdzie używane
 
-- (P)opis GUI 
-- (P)druga funkcja celu 
+- (P) opis GUI 
+- (P) druga funkcja celu -> dodać opis 
 
 
 

@@ -24,6 +24,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, '..'))
 sys.path.append(project_root)
 
+
 """ --- IMPORTY WŁASNYCH PLIKÓW --- """
 try:
     from gui.floor_define import FloorDefineWidget
@@ -478,20 +479,6 @@ class MainWindow(QMainWindow):
         
         self.worker.start()
 
-
-
-    """ Metoda aktualizująca heatmapę na wykresie  to się rzadziej robi żeby nie latało za bardzo GUI"""
-    # def update_heat(self, iteration, fitness, matrix):
-
-    #     #  Heatmapa
-    #     if self.heatmap is None:
-    #         self.heatmap = self.ax_map.imshow(matrix, cmap='jet', origin='upper', interpolation='nearest')
-    #         self.fig_map.colorbar(self.heatmap, ax=self.ax_map)
-    #     else:
-    #         self.heatmap.set_data(matrix)
-    #         self.heatmap.set_clim(vmin=np.min(matrix), vmax=np.max(matrix)) # Autoskalowanie kolorów
-        
-    #     self.canvas_map.draw()
     def update_heat(self, floor_idx: int, matrix: np.ndarray):
         if matrix is None:
             return
@@ -783,7 +770,7 @@ class MainWindow(QMainWindow):
             floor_number=floor_number,
             width=width,
             length=length,
-            thickness=0.5,
+            thickness=self.config.floor_thickness,
         )
         self.show_definition_page()
         self._refresh_floor_list()

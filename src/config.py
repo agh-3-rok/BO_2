@@ -6,7 +6,7 @@ class SimulationConfig:
     """Klasa przechowująca wszystkie parametry symulacji w jednym miejscu."""
     
     # --- Parametry Algorytmu Tabu Search ---
-    # objective_strategy: ObjectiveStrategy = ObjectiveStrategy.WEIGHTED_SIGNAL_SUM
+    # objective_strategy: ObjectiveStrategy = ObjectiveStrategy.    
     objective_strategy: ObjectiveStrategy = ObjectiveStrategy.THRESHOLD_COVERAGE
 
     tabu_strategy: TabuStrategy = TabuStrategy.BLOCK_ROUTER_ID
@@ -26,7 +26,7 @@ class SimulationConfig:
 
     # --- Parametry Środowiska / Budynku ---
     num_routers: int = 5                            # Liczba ruterów do umieszczenia
-    router_range: int = 9                          # Zasięg rutera (kratki w macierzy)  
+    router_range: int = 39                          # Zasięg rutera (kratki w macierzy)  
     coverage_threshold_db: float = -60.0            # Próg sygnału (dBm) powyżej którego punkt jest uznawany za pokryty (basic - skalowanie)
     coverage_threshold_step_db: float = 3.0         # Krok sygnału (dBm)
 
@@ -35,3 +35,4 @@ class SimulationConfig:
     floor_heights: float = 3.0                  # Wysokość piętra domyślna (metry)
     floor_width: int = 20                       # Szerokość piętra (metry)
     floor_length: int = 20                      # Długość piętra (metry)
+    floor_thickness: float = 0.3                # Grubość stropu (metry)

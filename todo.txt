@@ -51,6 +51,11 @@ testy cd:
 - jak wpływa długość taboo listy 
 - ilość iteracji
 
+
+kierunki rozwoju:
+- (P) czemu algo sie stuckuje (unieruchamia się)
+- plus co tam wyjdzie
+
 -- itd
 
 

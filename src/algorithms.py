@@ -409,6 +409,11 @@ class TabuSearch:
         
         self.tabu_list = []
         
+        # Licznik nieudanych prób ruchu dla diagnostyki
+        none_move_count = 0
+        min_distance_reject_count = 0
+        tabu_reject_before_aspiration = 0  # Odrzucone przez tabu przed sprawdzeniem aspiracji
+        
         # Główna pętla
         for iteration in range(self.max_iterations):
             
@@ -420,6 +425,7 @@ class TabuSearch:
                 move = None
                 
             if move is None:
+                none_move_count += 1
                 continue
                 
             r_id, old_p, new_p = move
@@ -429,6 +435,7 @@ class TabuSearch:
             
             #sprawdzenie czy nie wrzuciło rutera obok innego, jeśli tak to w ogole pomija możliwośc
             if not self._is_location_safe_for_router(r_id, new_p):
+                min_distance_reject_count += 1
                 if self.history['current_values']:
                     self.history['iterations'].append(iteration)
                     self.history['best_values'].append(self.best_value)
@@ -484,6 +491,7 @@ class TabuSearch:
             if not is_tabu:
                 accept = True
             else:
+                tabu_reject_before_aspiration += 1
                 # Kryterium Aspiracji
                 if self._check_aspiration(current_val, old_router_score, new_router_score):
                     accept = True
@@ -548,6 +556,19 @@ class TabuSearch:
                 on_progress(iteration, float(self.best_value), float(current_val), heatmap)
             # time.sleep(0.001)  # małe opóźnienie by GUI zdążyło odświeżyć
 
+        # Diagnostyka - dlaczego historia jest pusta
+        if not self.history['best_values']:
+            print(f"   ⚠ Historia jest pusta:")
+            print(f"      - Nieudane próby ruchu (move=None): {none_move_count}/{self.max_iterations}")
+            print(f"      - Odrzucone przez min_distance: {min_distance_reject_count}/{self.max_iterations}")
+            print(f"      - Odrzucone przez tabu (przed aspiracją): {tabu_reject_before_aspiration}/{self.max_iterations}")
+            print(f"      - Odrzucone przez tabu (po nieudanej aspiracji): {self.tabu_reject_cnt}/{self.max_iterations}")
+            print(f"      - Zaakceptowane przez aspirację: {aspiration_cnt}")
+            print(f"      - Tabu_length: {self.tabu_length}, Liczba routerów: {len(self.available_routers)}")
+            print(f"      - Min_distance: {self.min_distance}")
+            print(f"      - Liczba aktywnych routerów: {len([r for r in self.current_solution if r >= 0])}")
+            print(f"      - Liczba wolnych pozycji: {len([r for r in self.current_solution if r == -1])}")
+        
         # Reset i ustawienie
         for r in self.available_routers:
             r.position = None

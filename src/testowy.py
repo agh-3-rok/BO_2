@@ -17,12 +17,11 @@ from src.enums import (
     AspirationStrategy,
     InitialSolutionStrategy,
     LocalChangeStrategy,
+    ObjectiveStrategy,
 )
 
 MAP_SIZE = 100
-NUM_RUNS_PER_CFG = 50
-MAP_FILE = None  # Ustaw nazwę pliku .npz, np. "maps/map_50x2.npz" lub None aby użyć domyślnej mapy
-
+MAP_FILE = "zapisane/testowa_mapa2.npz"
 
 def create_environment(config: SimulationConfig) -> Building:
     """Wczytuje budynek z pliku npz lub generuje domyślny."""
@@ -30,31 +29,67 @@ def create_environment(config: SimulationConfig) -> Building:
         try:
             data = np.load(MAP_FILE, allow_pickle=True)
             
-            num_floors = int(data["num_floors"])
-            wall_matrices = data["wall_matrices"]
-            router_matrices = data["router_matrices"]
-            cover_matrices = data["cover_matrices"]
-            
-            floors = []
-            for f in range(num_floors):
-                floors.append(
-                    Floor(
-                        wall_matrix=wall_matrices[f],
-                        router_matrix=router_matrices[f],
-                        cover_matrix=cover_matrices[f],
-                        Floor_number=f,
-                        Floor_thickness=0.5,
+            # Format GUI - wall_0, router_0, cover_0, thickness_0, floor_count, floor_heights
+            if "floor_count" in data:
+                floor_count = int(data["floor_count"])
+                floor_heights = float(data["floor_heights"])
+                
+                floors = []
+                for f in range(floor_count):
+                    wall_matrix = data[f"wall_{f}"]
+                    router_matrix = data[f"router_{f}"].astype(int)
+                    cover_matrix = data[f"cover_{f}"].astype(int)
+                    thickness = float(data[f"thickness_{f}"])
+                    
+                    floors.append(
+                        Floor(
+                            wall_matrix=wall_matrix,
+                            router_matrix=router_matrix,
+                            cover_matrix=cover_matrix,
+                            Floor_number=f,
+                            Floor_thickness=thickness,
+                        )
                     )
+                
+                building = Building(
+                    Floors=floors,
+                    Floor_heights=floor_heights,
+                    available_routers=[],
+                    config=config,
                 )
+                print(f"✓ Wczytana mapa z: {MAP_FILE}\n")
+                return building
             
-            building = Building(
-                Floors=floors,
-                Floor_heights=3.0,
-                available_routers=[],
-                config=config,
-            )
-            print(f"✓ Wczytana mapa z: {MAP_FILE}\n")
-            return building
+            # Format map_generator
+            elif "num_floors" in data:
+                num_floors = int(data["num_floors"])
+                wall_matrices = data["wall_matrices"]
+                router_matrices = data["router_matrices"]
+                cover_matrices = data["cover_matrices"]
+                
+                floors = []
+                for f in range(num_floors):
+                    floors.append(
+                        Floor(
+                            wall_matrix=wall_matrices[f],
+                            router_matrix=router_matrices[f],   
+                            cover_matrix=cover_matrices[f],
+                            Floor_number=f,
+                            Floor_thickness=0.5,
+                        )
+                    )
+                
+                building = Building(
+                    Floors=floors,
+                    Floor_heights=3.0,
+                    available_routers=[],
+                    config=config,
+                )
+                print(f"✓ Wczytana mapa z: {MAP_FILE}\n")
+                return building
+            else:
+                raise ValueError("Nieznany format pliku npz")
+                
         except Exception as e:
             print(f"⚠ Nie można wczytać {MAP_FILE}: {e}")
             print("Używam domyślnej mapy...\n")
@@ -102,18 +137,22 @@ def create_environment(config: SimulationConfig) -> Building:
     )
 
 
+NUM_RUNS_PER_CFG = 1
+OBJECTIVE_FUNCTION = ObjectiveStrategy.THRESHOLD_COVERAGE  # Zmień na THRESHOLD_COVERAGE jeśli chcesz
+
 def build_config(tabu: TabuStrategy, asp: AspirationStrategy, init: InitialSolutionStrategy, local: LocalChangeStrategy) -> SimulationConfig:
     base = SimulationConfig(
-        num_routers=8,
-        router_range=9,
+        num_routers=25,
+        router_range=25,
         floor_damping=2.0,
-        max_iterations=40,
-        tabu_length=10,
-        min_distance=4.0,
+        max_iterations=50,
+        tabu_length=10,  # Zmniejszone z 20 (mniej niż liczba routerów)
+        min_distance=10,  # Zmniejszone z 30 (zbyt restrykcyjne)
         tabu_strategy=tabu,
         aspiration_strategy=asp,
         init_strategy=init,
         local_change_strategy=local,
+        objective_strategy=OBJECTIVE_FUNCTION,  # Używaj globalnej wartości
         aspiration_threshold=1.05,
         aspiration_usability_threshold=50.0,
     )
@@ -145,6 +184,10 @@ def main():
                 for local in local_variants:
                     combos.append((tabu, asp, init, local))
 
+    # Oblicz całkowitą liczbę uruchomień
+    total_runs = len(combos) * NUM_RUNS_PER_CFG
+    current_run = 0
+
     best_overall_value = -np.inf
     best_overall_solver = None
     best_overall_key = None
@@ -159,88 +202,126 @@ def main():
         }
 
         for run_idx in range(NUM_RUNS_PER_CFG):
+            current_run += 1
             seed = 1000 + idx * 100 + run_idx
             random.seed(seed)
             np.random.seed(seed)
 
-            solver = setup_solver(copy.deepcopy(cfg))
-            best_sol, best_val, history, asp_cnt = solver.run()
-            
-            series = history.get("best_values", [])
-            tabu_reject_series = history.get("tabu_reject_cnt", [])
-            
-            if series:
-                final_best = series[-1]
-                results[key]["best_vals"].append(final_best)
-                results[key]["asp_counts"].append(asp_cnt)
+            print(f"[{current_run}/{total_runs}] ", end="", flush=True)
+
+            try:
+                solver = setup_solver(copy.deepcopy(cfg))
+                best_sol, best_val, history, asp_cnt = solver.run()
                 
-                if tabu_reject_series:
-                    results[key]["tabu_rejects"].append(tabu_reject_series[-1])
+                series = history.get("best_values", [])
+                tabu_reject_series = history.get("tabu_reject_cnt", [])
+                
+                if series:
+                    final_best = series[-1]
+                    results[key]["best_vals"].append(final_best)
+                    results[key]["asp_counts"].append(asp_cnt)
+                    
+                    if tabu_reject_series:
+                        results[key]["tabu_rejects"].append(tabu_reject_series[-1])
+                    else:
+                        results[key]["tabu_rejects"].append(0)
+                    
+                    if final_best > best_overall_value:
+                        best_overall_value = final_best
+                        best_overall_solver = copy.deepcopy(solver)
+                        best_overall_key = key
+                        print(f"✓ Nowy rekord: {final_best:.4g}")
                 else:
-                    results[key]["tabu_rejects"].append(0)
-                
-                if final_best > best_overall_value:
-                    best_overall_value = final_best
-                    best_overall_solver = solver
-                    best_overall_key = key
+                    print(f"⚠ Brak wyników dla tego uruchomienia - history jest puste")
+                    print(f"   Config: Tabu={tabu.name}, Asp={asp.name}, Init={init.name}, Local={local.name}")
+            except Exception as e:
+                print(f"\n❌ BŁĄD w uruchomieniu {current_run}/{total_runs}:")
+                print(f"   Config: Tabu={tabu.name}, Asp={asp.name}, Init={init.name}, Local={local.name}")
+                print(f"   Błąd: {type(e).__name__}: {e}")
+                import traceback
+                traceback.print_exc()
+                print()
 
     # Przygotuj macierz do heatmapy: wiersze = tabu strategy, kolumny = kombinacje (asp, init, local)
-    row_labels = [t.name for t in tabu_variants]
-    col_labels = []
-    for asp in asp_variants:
-        for init in init_variants:
-            for local in local_variants:
-                col_labels.append(f"{asp.name[:3]}-{init.name.split('_')[0]}-{local.name.split('_')[0]}")
+    # 4x4 siatka: wiersze = (Tabu x Asp), kolumny = (Init x Local)
+    row_labels = [f"{t.name[:4]}-{a.name[:3]}" for t in tabu_variants for a in asp_variants]
+    col_labels = [f"{i.name.split('_')[0]}-{l.name.split('_')[0]}" for i in init_variants for l in local_variants]
 
     data_mean = np.zeros((len(row_labels), len(col_labels)))
     data_best = np.zeros((len(row_labels), len(col_labels)))
     data_tabu = np.zeros((len(row_labels), len(col_labels)))
     data_asp = np.zeros((len(row_labels), len(col_labels)))
 
-    for r, tabu in enumerate(tabu_variants):
-        for c, (asp, init, local) in enumerate([(a, i, l) for a in asp_variants for i in init_variants for l in local_variants]):
+    row_combos = [(t, a) for t in tabu_variants for a in asp_variants]
+    col_combos = [(i, l) for i in init_variants for l in local_variants]
+
+    for r, (tabu, asp) in enumerate(row_combos):
+        for c, (init, local) in enumerate(col_combos):
             res = results.get((tabu, asp, init, local), {})
             vals = res.get("best_vals", [])
             tabu_rej = res.get("tabu_rejects", [])
             asp_cnt = res.get("asp_counts", [])
             
-            data_mean[r, c] = np.mean(vals) if vals else np.nan
-            data_best[r, c] = np.max(vals) if vals else np.nan
-            data_tabu[r, c] = np.mean(tabu_rej) if tabu_rej else np.nan
-            data_asp[r, c] = np.mean(asp_cnt) if asp_cnt else np.nan
+            # Jeśli nie ma danych, ustaw 0 zamiast nan
+            data_mean[r, c] = np.mean(vals) if vals else 0.0
+            data_best[r, c] = np.max(vals) if vals else 0.0
+            data_tabu[r, c] = np.mean(tabu_rej) if tabu_rej else 0.0
+            data_asp[r, c] = np.mean(asp_cnt) if asp_cnt else 0.0
 
     # Tworzenie adnotacji wieloliniowych
     annot_array = np.empty((len(row_labels), len(col_labels)), dtype=object)
     for r in range(len(row_labels)):
         for c in range(len(col_labels)):
             annot_array[r, c] = (
-                f"Best: {data_best[r, c]:.4g}\n"
-                f"Mean: {data_mean[r, c]:.4g}\n"
-                f"Tabu: {data_tabu[r, c]:.2f}\n"
-                f"Asp: {data_asp[r, c]:.2f}"
+                    f"Best: {data_best[r, c]:.4g}\n"
+                    f"Mean: {data_mean[r, c]:.4g}\n"
+                    f"Tabu: {data_tabu[r, c]:.1f}\n"
+                    f"Asp: {data_asp[r, c]:.1f}"
             )
 
     df = pd.DataFrame(data_best, index=row_labels, columns=col_labels)
 
-    fig1 = plt.figure(figsize=(16, 6))
+    # Format pod 4x4 siatkę
+    fig1, ax1 = plt.subplots(figsize=(16, 12))
+    
     sns.heatmap(
         df,
         annot=annot_array,
         fmt="",
         cmap="rocket_r",
         cbar=True,
-        linewidths=0.5,
+        linewidths=1.5,
         linecolor="white",
-        annot_kws={"fontsize": 7},
+        annot_kws={"fontsize": 12, "weight": "bold"},
+        ax=ax1,
     )
-    plt.title(f"Statystyki z {NUM_RUNS_PER_CFG} uruchomień (MAP={MAP_SIZE}x{MAP_SIZE})")
-    plt.xlabel("Asp / Init / Local")
-    plt.ylabel("Tabu strategy")
-    plt.tight_layout()
+    
+    ax1.set_title(
+        f"Statystyki (Runs={NUM_RUNS_PER_CFG}, Map={MAP_SIZE}x{MAP_SIZE})",
+        fontsize=22,
+        pad=15,
+        fontweight="bold",
+    )
+    ax1.set_xlabel("Init x Local (Best, Mean, TabuRejects, AspCount)", fontsize=16, labelpad=10)
+    ax1.set_ylabel("Tabu x Asp", fontsize=16, labelpad=10)
+    
+    plt.xticks(fontsize=13, rotation=30, ha="right")
+    plt.yticks(fontsize=14, rotation=0)
+    
+    # tight_layout z paddingiem, żeby nie ucięło napisów
+    plt.tight_layout(pad=2.0)
 
-    # Mapa pokrycia najlepszego rozwiązania
+    # Zapis w wysokiej rozdzielczości (PDF do LaTeXa)
+    output_basename = "heatmap_results"
+    fig1.savefig(f"{output_basename}.pdf", format="pdf", bbox_inches="tight")
+
+    # Mapa pokrycia najlepszego rozwiązania ze wszystkich uruchomień
     if best_overall_solver is not None:
-        fig2 = plt.figure(figsize=(10, 5))
+        print(f"\n✓ Najlepszy wynik globalny: {best_overall_value:.6g}")
+        print(f"  Konfiguracja: Tabu={best_overall_key[0].name}, Asp={best_overall_key[1].name}, "
+              f"Init={best_overall_key[2].name}, Local={best_overall_key[3].name}\n")
+        
+        fig2 = plt.figure(figsize=(12, 6))
         
         for floor_idx in range(len(best_overall_solver.building.Floor_list)):
             ax = fig2.add_subplot(1, len(best_overall_solver.building.Floor_list), floor_idx + 1)
@@ -252,22 +333,32 @@ def main():
             floor = best_overall_solver.building.Floor_list[floor_idx]
             wall_mask = floor.wall_matrix > 0
             heatmap_with_walls = heatmap_data.copy()
-            heatmap_with_walls[wall_mask] = np.max(heatmap_data) * 1.2  # ściany jako jasne obszary
+            heatmap_with_walls[wall_mask] = np.max(heatmap_data) * 1.2
             
             im = ax.imshow(heatmap_with_walls, cmap="jet", origin="upper", interpolation="nearest")
             ax.set_title(f"Piętro {floor_idx}")
-            fig2.colorbar(im, ax=ax)
+
+            # Obrys obszarów z cover > 0, aby było widać wymagany zasięg
+            cover_mask = getattr(floor, "cover", None)
+            if cover_mask is not None:
+                cover_mask = cover_mask > 0
+            try:
+                ax.contour(cover_mask, levels=[0.5], colors="white", linewidths=0.8, linestyles="dashed")
+            except Exception:
+                pass
+
+            ax.tick_params(which="both", bottom=False, left=False, labelbottom=False, labelleft=False)
         
         fig2.suptitle(
-            f"Najlepsza mapa pokrycia (value={best_overall_value:.6g})\n"
+            f"NAJLEPSZA MAPA POKRYCIA ZE WSZYSTKICH URUCHOMIEŃ (value={best_overall_value:.6g})\n"
             f"Konfiguracja: Tabu={best_overall_key[0].name}, Asp={best_overall_key[1].name}, "
             f"Init={best_overall_key[2].name}, Local={best_overall_key[3].name}"
         )
         plt.tight_layout()
+        fig2.savefig("best_solution_map.pdf", format="pdf", bbox_inches="tight")
+    else:
+        print("\n⚠ Brak najlepszego rozwiązania do wyświetlenia")
 
-    plt.show()
-
-    plt.tight_layout()
     plt.show()
 
 

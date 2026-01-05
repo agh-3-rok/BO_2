@@ -9,36 +9,51 @@ założenia :
 co zrobić:
 
 BACKEND
-- dołożyć 2 wersje funkcji celu liczącą w ilu miejscach dany router daje zasięg -> KORZYSTAĆ Z THRESHOLD
+- (W) is_safe dorzucić do taboo listy 
 
 
 FRONTEND
-- wpisywanie danych -> brakuje ilości routerów
-- rysowanie wykresu funkcji celu (real time ?) 
-- zaznaczać na heat mapie ściany i gdzie jest liczone
+- (P) zaznaczać na heat mapie ściany i gdzie jest liczone
+
+
 
 RAPORT
-- czym jest is_safe? opisać 
-- troszkę więcej szczegółów implemetacyjnych do samego algosa,
- jakie struktory danych, 
- jak jest licozna jest użyteczność routera
+- (W) czym jest is_safe? opisać 
+- (W) troszkę więcej szczegółów implemetacyjnych do samego algosa, jakie struktory danych, jak jest licozna jest użyteczność routera
+- (W) mapki roueterów po co gdzie używane
+
+- (P)opis GUI 
+- (P)druga funkcja celu 
 
 
 
-Do sprawdzenia: 
+Do testów: 
 
-- fizyczność rozw. -> CZY ZGADZA SIĘ Z LOGIKĄ? 
+---- fizyka z gui itp waldacja :
 
--- zrobić testy fizycznośći rozw. -> jakieś przykłady 2 skupiska miejsc gdzie chcemy mieć zasięg, między nimi kilka ścian (a co jak będize podłoga, albo kilka pięter), gdzie algorytm da router, 
--- badanie wpływu parametrów fizycznych na algorytm
--- przetestować fizykę -> czy na pewno dobrze wyliczane są kolejne punkty przechodzenia przez podłogę!
+- (P)fizyczność rozw. -> CZY ZGADZA SIĘ Z LOGIKĄ? 
+-(P) czy faktycznie będzie bilsko pnktów obliczeń szukał
+- (P)czy będzie próbował omijać ściany
+- (P)czy piętra działają tak jak myślimy
+-- (P)zrobić testy fizycznośći rozw. -> jakieś przykłady 2 skupiska miejsc gdzie chcemy mieć zasięg, między nimi kilka ścian (a co jak będize podłoga, albo kilka pięter), gdzie algorytm da router, 
 
 
-- jakieś parametry algosa
--- ilość iteracji
+
+--- duży zbiór -> badania własności szczegółowe
+
+implementacja:
+- (W) zrobić zbiór scneraiuszy testowych
+- (W) zrobić możliwość wygodnego przechodzenia z różnymi configami przez testy
+
+
+testy cd:
+- jakie wersje algosa najlepsiej wypadaja na testach
+- jak wpływa długość taboo listy 
+- ilość iteracji
+
 -- itd
 
 
 ----------------- EWENTUALNE POPRAWY DZIAŁANIA ----------------
-zmiana obliczania local_change -> wyliczanie w tej funkcji danych dla rutera sprawia ze potem w run trzeba w elsie szukać starego rozwiązania, lepiej robić w run snapshot starego
+
 

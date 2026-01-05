@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QListWidget, QFileDialog,
     QMessageBox, QLabel, QComboBox
 )
-m
+
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure

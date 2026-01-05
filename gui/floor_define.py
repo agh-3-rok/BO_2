@@ -88,7 +88,7 @@ class FloorDefineWidget(QWidget):
 
     def start_new_floor(self, *, floor_number: int, width: int, length: int, thickness: float):
             """
-            Przygotowuje siatkę do edycji. Nie dodaje nic do Building – tylko edycja.
+            Przygotowuje siatkę do edycji. Nie dodaje nic do Building - tylko edycja.
             Dopiero `Zatwierdź` emituje gotowe macierze i Floor.
             """
             self._pending_floor_number = floor_number
@@ -375,7 +375,7 @@ class FloorDefineWidget(QWidget):
                 elif tile_type == TileType.ROUTER:
                     wall_matrix[r, c] = 0.0
                     router_matrix[r, c] = True
-                    cover_matrix[r, c] = 0
+                    cover_matrix[r, c] = self.cover_value
                 elif tile_type == TileType.NO_TILE:
                     wall_matrix[r, c] = 0.0
                     router_matrix[r, c] = False

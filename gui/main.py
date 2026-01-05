@@ -230,6 +230,7 @@ class MainWindow(QMainWindow):
         # Wykres 1: Mapa pokrycia + lista pięter
         self.fig_map = Figure()
         self.canvas_map = FigureCanvas(self.fig_map)
+        self.cover_contour = None
         self.ax_map = self.fig_map.add_subplot(111)
         self.ax_map.set_title("Heatmapa Zasięgu")
         # self.heatmap = None
@@ -479,58 +480,96 @@ class MainWindow(QMainWindow):
         
         self.worker.start()
 
+
     def update_heat(self, floor_idx: int, matrix: np.ndarray):
         if matrix is None:
             return
 
-        # jeśli zmienił się rozmiar macierzy (inne piętro), rekonstruujemy warstwy
-        if self.heatmap_img is None or (self._map_shape is not None and self._map_shape != matrix.shape):
+        bld = self._get_map_building()
+        heat = np.asarray(matrix, dtype=float)
+
+        # wall mask (jeśli pasuje rozmiarem)
+        wall_mask = None
+        if 0 <= floor_idx < len(bld.Floor_list):
+            wall = np.asarray(bld.Floor_list[floor_idx].wall_matrix, dtype=float)
+            if wall.shape == heat.shape:
+                wall_mask = wall > 0
+
+        # vmin/vmax z samej heatmapy (bez “whiteningu” ścian)
+        try:
+            vmin = float(np.nanmin(heat))
+            vmax = float(np.nanmax(heat))
+        except ValueError:
+            vmin, vmax = 0.0, 1.0
+
+        if not np.isfinite(vmin):
+            vmin = 0.0
+        if not np.isfinite(vmax):
+            vmax = 1.0
+        if vmin == vmax:
+            vmin -= 1.0
+            vmax += 1.0
+
+        # “whitening” ścian: wartości > vmax + colormap.set_over("white")
+        heat_display = heat.copy()
+        if wall_mask is not None and np.any(wall_mask):
+            heat_display[wall_mask] = vmax * 1.2
+
+        # jeśli zmienił się rozmiar macierzy (inne piętro), rekonstruujemy wykres
+        if self.heatmap_img is None or (self._map_shape is not None and self._map_shape != heat_display.shape):
             self._reset_map_layers()
-            self._map_shape = matrix.shape
+            self._map_shape = heat_display.shape
+
+            cmap = mpl.colormaps["jet"].copy()
+            cmap.set_over("white")
+            norm = mcolors.Normalize(vmin=vmin, vmax=vmax, clip=False)
 
             self.heatmap_img = self.ax_map.imshow(
-                matrix,
-                cmap=mpl.colormaps["jet"],
+                heat_display,
+                cmap=cmap,
+                norm=norm,
                 origin="upper",
                 interpolation="nearest",
             )
-            self.heatmap_cbar = self.fig_map.colorbar(self.heatmap_img, ax=self.ax_map)
-
-            # punkty obliczeń (cover > 0) – zielone kwadraty, półprzezroczyste
-            points_cmap = mcolors.ListedColormap(["lime"])
-            points_cmap.set_bad(alpha=0.0)
-            points_overlay = self._make_points_overlay(floor_idx, matrix.shape)
-            self.points_img = self.ax_map.imshow(
-                points_overlay,
-                cmap=points_cmap,
-                origin="upper",
-                interpolation="nearest",
-                alpha=0.35,
-                vmin=0.0,
-                vmax=1.0,
-            )
-
-            # ściany (wall_matrix > 0) – czarne
-            walls_cmap = mcolors.ListedColormap(["black"])
-            walls_cmap.set_bad(alpha=0.0)
-            walls_overlay = self._make_walls_overlay(floor_idx, matrix.shape)
-            self.walls_img = self.ax_map.imshow(
-                walls_overlay,
-                cmap=walls_cmap,
-                origin="upper",
-                interpolation="nearest",
-                alpha=1.0,
-                vmin=0.0,
-                vmax=1.0,
-            )
+            self.heatmap_cbar = self.fig_map.colorbar(self.heatmap_img, ax=self.ax_map, extend="max")
+            self.ax_map.tick_params(which="both", bottom=False, left=False, labelbottom=False, labelleft=False)
         else:
-            self.heatmap_img.set_data(matrix)
-            self.heatmap_img.set_clim(vmin=float(np.nanmin(matrix)), vmax=float(np.nanmax(matrix)))
+            self.heatmap_img.set_data(heat_display)
+            # aktualizacja normy (ważne: clip=False zostaje)
+            if getattr(self, "cover_contour", None) is not None:
+                for coll in getattr(self.cover_contour, "collections", []):
+                    coll.remove()
+            self.cover_contour = None
+            
+            if getattr(self.heatmap_img, "norm", None) is not None:
+                self.heatmap_img.norm.vmin = vmin
+                self.heatmap_img.norm.vmax = vmax
+            else:
+                self.heatmap_img.set_clim(vmin=vmin, vmax=vmax)
 
-            if self.points_img is not None:
-                self.points_img.set_data(self._make_points_overlay(floor_idx, matrix.shape))
-            if self.walls_img is not None:
-                self.walls_img.set_data(self._make_walls_overlay(floor_idx, matrix.shape))
+        # usuń poprzedni kontur (żeby się nie nakładał)
+        if self.cover_contour is not None:
+            for coll in getattr(self.cover_contour, "collections", []):
+                coll.remove()
+            self.cover_contour = None
+
+        # kontur cover>0 (jak w testowy.py)
+        if 0 <= floor_idx < len(bld.Floor_list):
+            cover = getattr(bld.Floor_list[floor_idx], "cover", None)
+            if cover is not None:
+                cover_arr = np.asarray(cover)
+                if cover_arr.shape == heat_display.shape:
+                    cover_mask = cover_arr > 0
+                    try:
+                        self.cover_contour = self.ax_map.contour(
+                            cover_mask,
+                            levels=[0.5],
+                            colors="white",
+                            linewidths=0.8,
+                            linestyles="dashed",
+                        )
+                    except Exception:
+                        self.cover_contour = None
 
         self.canvas_map.draw()
 
